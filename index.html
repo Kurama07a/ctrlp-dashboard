@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTRL-P Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Authentication Pages -->
+    <div id="authView" class="auth-container">
+        <div class="login-container">
+            <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+
+            <div class="logo-section">
+                <div>
+                    <div class="logo">
+                        <img src="white.png" alt="Ctrl+P Logo">
+                    </div>
+                    <p class="slogan">Automated cloud printing solutions for modern businesses. Streamline your workflow with our innovative platform.</p>
+                </div>
+
+                <div class="printer-animation">
+                    <div class="printer">
+                        <div class="printer-top"></div>
+                        <div class="printer-slot"></div>
+                        <div class="paper">
+                            <div class="paper-content">
+                                <div class="line"></div>
+                                <div class="line"></div>
+                                <div class="line"></div>
+                                <div class="line"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dots">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div id="loginForm">
+                    <div class="form-header">
+                        <h1>Welcome Back</h1>
+                        <p>Login to access your cloud printing dashboard</p>
+                    </div>
+
+                    <form id="loginFormInner">
+                        <div class="form-group">
+                            <label for="loginEmail">Email Address</label>
+                            <input type="email" id="loginEmail" placeholder="Enter your email" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" id="loginPassword" placeholder="Enter your password" required>
+                            <span class="toggle-password" id="togglePassword" title="Show password">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+
+                        <button type="submit" class="login-btn" id="loginBtn">
+                            <span class="btn-text">Login</span>
+                            <div class="loader"></div>
+                        </button>
+                    </form>
+
+
+                </div>
+
+                <div id="signupForm" class="hidden">
+                    <div class="form-header">
+                        <h1>Sign Up</h1>
+                        <p>Create an account to get started</p>
+                    </div>
+
+                    <form id="signupFormInner">
+                        <div class="form-group">
+                            <label for="signupEmail">Email Address</label>
+                            <input type="email" id="signupEmail" placeholder="Enter your email" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="signupPassword">Password</label>
+                            <input type="password" id="signupPassword" placeholder="Enter your password" required>
+                            <span class="toggle-password" id="toggleSignupPassword" title="Show password">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+
+                        <button type="submit" class="login-btn" id="signupBtn">
+                            <span class="btn-text">Sign Up</span>
+                            <div class="loader"></div>
+                        </button>
+                    </form>
+
+                    <div class="support-link">
+                        <a href="#" onclick="toggleAuthForm()">Already have an account? Login</a>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <div>© 2025 Ctrl+P by ZiggleBerry Pvt Ltd</div>
+                    <div class="footer-links">
+                        <a href="#">Privacy Policy</a> | <a href="#">Terms & Conditions</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboardView" class="hidden">
+        <div class="sidebar">
+            <div>
+                <div class="logo">
+                    <img src="blue.png" alt="CTRL-P Logo" id="logo">
+                </div>
+                <div class="nav-item" id="dashboardNav">
+                    <a href="#"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-item" id="transactionNav">
+                    <a href="#"><i class="fas fa-exchange-alt"></i><span>Transaction</span></a>
+                </div>
+                <div class="nav-item" id="statisticsNav">
+                    <a href="#"><i class="fas fa-chart-bar"></i><span>Statistics</span></a>
+                </div>
+                <div class="nav-item">
+                    <a href="#" id = "checkForUpdates"><i class="fas fa-sync"></i><span>Check for Updates</span></a>
+                </div>
+                <div class="nav-item" id="settingsNav">
+                    <a href="#"><i class="fas fa-cog"></i><span>Settings</span></a>
+                </div>
+            </div>
+            <div>
+                <div class="notification-panel" id="notificationContainer">
+                    Notifications will appear here
+                </div>
+                <div class="user-dropdown">
+                    <div class="user-info">
+                        <img src="https://via.placeholder.com/40" alt="User Avatar" class="user-avatar">
+                        <div>
+                            <div class="user-name">User Name</div>
+                            <div class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="eadfd9cfd8eacfd2cbc7dac6cf84c9c5c7">[email&#160;protected]</a></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="footer">
+                    Product Developed by CTRL P
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <header class="header">
+                <h1>Dashboard</h1>
+                <div style="display: flex; align-items: center;">
+                    <!--
+                    <div class="header-metrics">
+                        <div class="header-metric">
+                            <span class="header-metric-title">Total Pages</span>
+                            <span id="totalPages" class="header-metric-value">0</span>
+                        </div>
+                        <div class="header-metric">
+                            <span class="header-metric-title">Monochrome</span>
+                            <span id="monochromeJobs" class="header-metric-value">0</span>
+                        </div>
+                        <div class="header-metric">
+                            <span class="header-metric-title">Color</span>
+                            <span id="colorJobs" class="header-metric-value">0</span>
+                        </div>
+                        <div class="header-metric">
+                            <span class="header-metric-title">Income</span>
+                            <span id="totalIncome" class="header-metric-value">₹0</span>
+                        </div>
+                    </div> -->
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleWebSocket">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="statusText" style="margin-left: 10px;">OFFLINE</span>
+                </div>
+                <!-- Add smaller indicators in the header -->
+                
+            </header>
+
+            <div id="printerView">
+                <!-- Replace metrics section with daily metrics -->
+                <section class="metrics">
+                    <div class="metric-card">
+                        <div class="metric-title">Today's Total Pages</div>
+                        <div id="dailyTotalPages" class="metric-value">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">Today's Monochrome Jobs</div>
+                        <div id="dailyMonochromeJobs" class="metric-value">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">Today's Color Jobs</div>
+                        <div id="dailyColorJobs" class="metric-value">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">Today's Total Income</div>
+                        <div id="dailyTotalIncome" class="metric-value">₹0</div>
+                    </div>
+                </section>
+                
+                <div id="discardedPrinters" class="discarded-printers hidden">
+                    <div class="discarded-printers-title">
+                        <i class="fas fa-trash-restore"></i> Discarded Printers
+                    </div>
+                    <div id="discardedPrintersList" class="discarded-printers-list">
+                        <!-- Discarded printers will be added here dynamically -->
+                    </div>
+                </div>
+                
+                <section id="printersContainer" class="printers-container"></section>
+            </div>
+
+            <div id="transactionView" class="transaction-view">
+                <!-- Header is now updated via JS, no need for a static one here -->
+                <div class="date-filter">
+                    <input type="date" id="startDate">
+                    <input type="date" id="endDate">
+                    <button id="filterButton">Filter</button>
+                    <script>
+                        // Set default dates
+                        const today = new Date();
+                        const yesterday = new Date(today);
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        
+                        // Format dates as YYYY-MM-DD for input elements
+                        document.getElementById('startDate').value = yesterday.toISOString().split('T')[0];
+                        document.getElementById('endDate').value = today.toISOString().split('T')[0];
+                    </script>
+                </div>
+                <table class="transaction-table">
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>Date</th>
+                            <th>File</th>
+                            <th>Printer</th>
+                            <th>Pages</th>
+                            <th>Color</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionTableBody"></tbody>
+                </table>
+            </div>
+
+            <div id="statisticsView" class="statistics-view">
+                <div class="settings-nav-bar">
+                    <div class="settings-nav-title">
+                        <i class="fas fa-chart-bar"></i>
+                        <h2>Printing Statistics</h2>
+                    </div>
+                    
+                </div>
+                <div class="earnings-table-container">
+                    <h3>Total Earnings by Day</h3>
+                    <table class="earnings-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Total Pages</th>
+                                <th>Monochrome Jobs</th>
+                                <th>Color Jobs</th>
+                                <th>Total Income</th>
+                            </tr>
+                        </thead>
+                        <tbody id="earningsTableBody">
+                            <!-- Rows will be dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <canvas id="jobsPerDayChart"></canvas>
+                    </div>
+                    <div class="stats-card">
+                        <canvas id="jobTypeDistributionChart"></canvas>
+                    </div>
+                    <div class="stats-card">
+                        <canvas id="paperSizeDistributionChart"></canvas>
+                    </div>
+                    <div class="stats-card">
+                        <canvas id="printerUsageChart"></canvas>
+                    </div>
+                    <div class="stats-card">
+                        <canvas id="colorVsMonochromeChart"></canvas>
+                    </div>
+                    <div class="stats-card">
+                        <canvas id="dailyJobsChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="stats-summary">
+                    <div class="summary-card">
+                        <h3>Print Volume Analysis</h3>
+                        <div id="volumeStats"></div>
+                    </div>
+                    <div class="summary-card">
+                        <h3>Efficiency Metrics</h3>
+                        <div id="efficiencyStats"></div>
+                    </div>
+                </div>
+
+                
+            </div>
+
+            <div id="settingsView" class="settings-view">
+                <div class="settings-nav-bar">
+                    <div class="settings-nav-title">
+                        <i class="fas fa-cog"></i>
+                        <h2>Settings</h2>
+                    </div>
+                </div>
+                
+                <!-- Add horizontal settings navigation -->
+                <div class="settings-top-nav">
+                    <button class="settings-nav-button active" data-section="account">
+                        <i class="fas fa-user"></i>
+                        Account
+                    </button>
+                    <button class="settings-nav-button" data-section="printers">
+                        <i class="fas fa-print"></i>
+                        Printers
+                    </button>
+                    <button class="settings-nav-button" data-section="kyc">
+                        <i class="fas fa-id-card"></i>
+                        KYC
+                    </button>
+                    <button class="settings-nav-button" data-section="notifications">
+                        <i class="fas fa-bell"></i>
+                        Notifications
+                    </button>
+                </div>
+                
+                <div class="settings-container">
+                    <div class="settings-content">
+                        <!-- Account section -->
+                        <div class="settings-section active" id="accountSection">
+                            <div class="settings-section-nav">
+                                <button class="settings-section-button active" data-tab="accountProfileTab">Profile</button>
+                                <button class="settings-section-button" data-tab="accountSecurityTab">Security</button>
+                            </div>
+                            
+                            <!-- Existing tabs -->
+                            <div class="settings-tab active" id="accountProfileTab">
+                                <h2>Shop Information</h2>
+                                <div class="shop-info-container">
+                                    <div class="shop-info-fields">
+                                        <div class="form-group">
+                                            <label>Shop Name</label>
+                                            <div id="shopName" class="readonly-field">Loading...</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Owner Name</label>
+                                            <div id="shopOwner" class="readonly-field">Loading...</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Contact Number</label>
+                                            <div id="shopContact" class="readonly-field">Loading...</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Email Address</label>
+                                            <div id="shopEmail" class="readonly-field">Loading...</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Shop Address</label>
+                                            <div id="shopAddress" class="readonly-field">Loading...</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>GST Number</label>
+                                            <div id="shopGST" class="readonly-field">Loading...</div>
+                                        </div>
+                                    </div>
+                                    <div class="shop-info-actions">
+                                        <button id="editShopInfoBtn" class="btn btn-primary">Edit Shop Details</button>
+                                        <button id="kycStatusBtn" class="btn btn-secondary mt-20">
+                                            <i class="fas fa-exclamation-circle"></i> Complete KYC
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="editShopInfoModal" class="modal hidden">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h3>Edit Shop Information</h3>
+                                            <span class="close-modal">&times;</span>
+                                        </div>
+                                        <div class="modal-body">
+                                            <form class="settings-form">
+                                                <div class="form-group">
+                                                    <label for="shopName">Shop Name</label>
+                                                    <input type="text" id="shopName" class="form-control" placeholder="Enter shop name">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="shopLocation">Location</label>
+                                                    <input type="text" id="shopLocation" class="form-control" placeholder="Enter shop location">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="shopAddress">Address</label>
+                                                    <textarea id="shopAddress" class="form-control" rows="3" placeholder="Enter shop address"></textarea>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="shopContactInfo">Contact Info</label>
+                                                    <input type="text" id="shopContactInfo" class="form-control" placeholder="Enter contact info">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="confirmPassword">Confirm with Password</label>
+                                                    <input type="password" id="confirmPassword" class="form-control" placeholder="Enter your password">
+                                                </div>
+                                                <button id="saveShopInfoBtn" class="btn btn-primary">Save Changes</button>
+                                            </form>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button class="btn btn-secondary close-modal-btn">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="settings-tab" id="accountSecurityTab">
+                                <h2>Security Settings</h2>
+                                <form class="settings-form">
+                                    <div class="form-group">
+                                        <label for="currentPassword">Current Password</label>
+                                        <input type="password" id="currentPassword" class="form-control" placeholder="Enter your current password">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="newPassword">New Password</label>
+                                        <input type="password" id="newPassword" class="form-control" placeholder="Enter new password">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="confirmNewPassword">Confirm New Password</label>
+                                        <input type="password" id="confirmNewPassword" class="form-control" placeholder="Confirm new password">
+                                    </div>
+                                    <button type="button" class="btn btn-primary">Update Password</button>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <!-- Printers section -->
+                        <div class="settings-section" id="printersSection">
+                            <div class="settings-section-nav">
+                                <button class="settings-section-button active" data-tab="printersManageTab">Manage Printers</button>
+                                <button class="settings-section-button" data-tab="printersDefaultsTab">Default Settings</button>
+                            </div>
+                            
+                            <!-- Existing tabs -->
+                            <div class="settings-tab active" id="printersManageTab">
+                                <h2>Manage Printers</h2>
+                                <div class="printer-settings-container">
+                                    <div class="active-printers">
+                                        <h3>Active Printers</h3>
+                                        <div id="activePrintersList">
+                                            <!-- Printer list will be loaded dynamically -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="settings-tab" id="printersDefaultsTab">
+                                <h2>Default Settings</h2>
+                                <form class="settings-form">
+                                    <div class="form-group">
+                                        <label for="defaultPrinter">Default Printer</label>
+                                        <select id="defaultPrinter" class="form-control">
+                                            <!-- Options will be loaded dynamically -->
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="defaultPaperSize">Default Paper Size</label>
+                                        <select id="defaultPaperSize" class="form-control">
+                                            <option value="A4">A4</option>
+                                            <option value="A3">A3</option>
+                                            <option value="Letter">Letter</option>
+                                            <option value="Legal">Legal</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="defaultColorMode" checked>
+                                        <label for="defaultColorMode">Default to Color Printing</label>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="defaultDuplex">
+                                        <label for="defaultDuplex">Default to Duplex Printing</label>
+                                    </div>
+                                    <button type="button" class="btn btn-primary">Save Defaults</button>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <!-- KYC section -->
+                        <div class="settings-section" id="kycSection">
+                            <div class="settings-section-nav">
+                                <button class="settings-section-button active" data-tab="kycStatusTab">Verification Status</button>
+                            </div>
+                            
+                            <!-- Existing tab -->
+                            <div class="settings-tab active" id="kycStatusTab">
+                                <h2>KYC Verification Status</h2>
+                                <div class="kyc-status">
+                                    <div class="kyc-status-indicator pending">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Pending Verification</span>
+                                    </div>
+                                    <div class="kyc-note" id="kyc_note">Your KYC documents are currently under review. This typically takes 1-3 business days.</p>
+                                </div>
+                                
+                                <div class="kyc-timeline">
+                                    <div class="timeline-item active">
+                                        <div class="timeline-point"></div>
+                                        <div class="timeline-content">
+                                            <h4>Documents Submitted</h4>
+                                            <p class="timeline-date">May 15, 2023 - 10:30 AM</p>
+                                        </div>
+                                    </div>
+                                    <div class="timeline-item">
+                                        <div class="timeline-point"></div>
+                                        <div class="timeline-content">
+                                            <h4>Verification In Progress</h4>
+                                            <p>Our team is reviewing your documents</p>
+                                        </div>
+                                    </div>
+                                    <div class="timeline-item">
+                                        <div class="timeline-point"></div>
+                                        <div class="timeline-content">
+                                            <h4>Verification Complete</h4>
+                                            <p>Once verified, your account will be fully activated</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="kyc-action-buttons mt-20">
+                                    <button type="button" class="btn btn-secondary" id="viewKycDetailsBtn">
+                                        <i class="fas fa-eye"></i> View Submitted Documents
+                                    </button>
+                                    <button type="button" class="btn btn-primary" id="updateKycBtn">
+                                        <i class="fas fa-pen"></i> Update KYC Information
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Notifications section -->
+                        <div class="settings-section" id="notificationsSection">
+                            <div class="settings-section-nav">
+                                <button class="settings-section-button active" data-tab="notificationsEmailTab">Email Notifications</button>
+                                <button class="settings-section-button" data-tab="notificationsAppTab">App Notifications</button>
+                            </div>
+                            
+                            <!-- Existing tabs -->
+                            <div class="settings-tab active" id="notificationsEmailTab">
+                                <h2>Email Notification Preferences</h2>
+                                <form class="settings-form">
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="emailNewJobs" checked>
+                                        <label for="emailNewJobs">New Print Jobs</label>
+                                        <p class="text-sm text-gray-600">Receive email notifications when new print jobs are received</p>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="emailCompleted" checked>
+                                        <label for="emailCompleted">Completed Jobs</label>
+                                        <p class="text-sm text-gray-600">Receive email notifications when jobs are completed</p>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="emailFailed">
+                                        <label for="emailFailed">Failed Jobs</label>
+                                        <p class="text-sm text-gray-600">Receive email notifications when jobs fail</p>
+                                    </div>
+                                    <button type="button" class="btn btn-primary">Save Email Preferences</button>
+                                </form>
+                            </div>
+                            
+                            <div class="settings-tab" id="notificationsAppTab">
+                                <h2>App Notification Preferences</h2>
+                                <form class="settings-form">
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="appSoundNotification" checked>
+                                        <label for="appSoundNotification">Sound Alerts</label>
+                                        <p class="text-sm text-gray-600">Play sound when new print jobs arrive</p>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="appBrowserNotification">
+                                        <label for="appBrowserNotification">Browser Notifications</label>
+                                        <p class="text-sm text-gray-600">Show desktop notifications for important alerts</p>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="appInAppNotification" checked>
+                                        <label for="appInAppNotification">In-App Notifications</label>
+                                        <p class="text-sm text-gray-600">Show notifications within the app interface</p>
+                                    </div>
+                                    <button type="button" class="btn btn-primary">Save App Preferences</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this modal overlay for KYC form outside of normal flow -->
+    <div id="kycOverlayModal" class="kyc-overlay-modal hidden">
+        <div class="kyc-modal-content">
+            <div class="kyc-modal-header">
+                <h2>Complete KYC Verification</h2>
+                <span class="close-kyc-modal">&times;</span>
+            </div>
+            <div class="kyc-modal-body">
+                <div class="kyc-form-container">
+                    <div class="kyc-form-section">
+                        <h4>Personal Information</h4>
+                        <div class="form-group">
+                            <label for="kycFullName">Full Name (as per Aadhaar)</label>
+                            <input type="text" id="kycFullName" class="form-control" placeholder="Enter full name">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="kycDob">Date of Birth</label>
+                                <input type="date" id="kycDob" class="form-control">
+                            </div>
+                            <div class="form-group half">
+                                <label for="kycGender">Gender</label>
+                                <select id="kycGender" class="form-control">
+                                    <option value="">Select Gender</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="kycAddress">Residential Address</label>
+                            <textarea id="kycAddress" class="form-control" rows="3" placeholder="Enter your residential address"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="kycPincode">PIN Code</label>
+                                <input type="text" id="kycPincode" class="form-control" placeholder="6-digit PIN code">
+                            </div>
+                            <div class="form-group half">
+                                <label for="kycCity">City</label>
+                                <input type="text" id="kycCity" class="form-control" placeholder="Enter city">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="kycState">State</label>
+                                <select id="kycState" class="form-control">
+                                    <option value="">Select State</option>
+                                    <option value="KA">Karnataka</option>
+                                    <option value="TN">Tamil Nadu</option>
+                                    <option value="AP">Andhra Pradesh</option>
+                                    <option value="MH">Maharashtra</option>
+                                    <!-- More states would be added here -->
+                                </select>
+                            </div>
+                            <div class="form-group half">
+                                <label for="kycCountry">Country</label>
+                                <input type="text" id="kycCountry" class="form-control" value="India" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="kyc-form-section">
+                        <h4>Document Upload</h4>
+                        <p class="text-sm text-gray-600">All documents must be clear, legible and complete. Maximum file size: 5MB</p>
+                        
+                        <div class="document-upload-row">
+                            <div class="document-upload-col">
+                                <div class="document-upload-label">
+                                    <div class="required-badge">Required</div>
+                                    <label>Passport Size Photo</label>
+                                    <p class="text-sm">Recent, white background</p>
+                                </div>
+                                <div class="document-upload kyc-upload" data-type="passport-photo">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="upload-text">Upload Photo</div>
+                                    <input type="file" class="file-input" accept="image/*" hidden>
+                                </div>
+                                <div class="document-preview" id="passport-photoPreview"></div>
+                            </div>
+                            
+                            <div class="document-upload-col">
+                                <div class="document-upload-label">
+                                    <div class="required-badge">Required</div>
+                                    <label>Aadhaar Card Front</label>
+                                </div>
+                                <div class="document-upload kyc-upload" data-type="aadhaar-front">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-id-card"></i>
+                                    </div>
+                                    <div class="upload-text">Upload Front</div>
+                                    <input type="file" class="file-input" accept="image/*, application/pdf" hidden>
+                                </div>
+                                <div class="document-preview" id="aadhaar-frontPreview"></div>
+                            </div>
+                        
+                        <div class="document-upload-row">
+                            <div class="document-upload-col">
+                                <div class="document-upload-label">
+                                    <div class="required-badge">Required</div>
+                                    <label>PAN Card</label>
+                                </div>
+                                <div class="document-upload kyc-upload" data-type="pan-card">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-id-card"></i>
+                                    </div>
+                                    <div class="upload-text">Upload PAN</div>
+                                    <input type="file" class="file-input" accept="image/*, application/pdf" hidden>
+                                </div>
+                                <div class="document-preview" id="pan-cardPreview"></div>
+                            </div>
+                            
+                            <div class="document-upload-col">
+                                <div class="document-upload-label">
+                                    <div class="required-badge">Required</div>
+                                    <label>Bank Statement/Passbook</label>
+                                    <p class="text-sm">First page with account details</p>
+                                </div>
+                                <div class="document-upload kyc-upload" data-type="bank-proof">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-file-invoice"></i>
+                                    </div>
+                                    <div class="upload-text">Upload Document</div>
+                                    <input type="file" class="file-input" accept="image/*, application/pdf" hidden>
+                                </div>
+                                <div class="document-preview" id="bank-proofPreview"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="kyc-form-section">
+                        <h4>Bank Details</h4>
+                        <p class="text-sm text-gray-600">Your bank account details for receiving payments</p>
+                        
+                        <div class="form-group">
+                            <label for="kycAccountHolderName">Account Holder Name</label>
+                            <input type="text" id="kycAccountHolderName" class="form-control" placeholder="Enter account holder's name">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="kycAccountNumber">Account Number</label>
+                                <input type="text" id="kycAccountNumber" class="form-control" placeholder="Enter account number">
+                            </div>
+                            <div class="form-group half">
+                                <label for="kycIfscCode">IFSC Code</label>
+                                <input type="text" id="kycIfscCode" class="form-control" placeholder="Enter IFSC code">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="kycBankName">Bank Name</label>
+                                <input type="text" id="kycBankName" class="form-control" placeholder="Enter bank name">
+                            </div>
+                            <div class="form-group half">
+                                <label for="kycBranchName">Branch Name</label>
+                                <input type="text" id="kycBranchName" class="form-control" placeholder="Enter branch name">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="kyc-form-section">
+                        <h4>Declaration</h4>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="kycDeclaration">
+                            <label for="kycDeclaration" class="declaration-text">
+                                I hereby declare that all the information provided by me is true and correct to the best of my knowledge. 
+                                I understand that providing false information may result in rejection of my application and other legal consequences.
+                                I authorize CTRL+P to verify the information provided by me.
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="kyc-form-actions">
+                        <button type="button" class="btn btn-secondary close-kyc-modal-btn">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="submitKycOverlayBtn">Submit KYC</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggling
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            body.classList.add('dark-mode');
+            updateThemeIcon(true);
+        }
+
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            const isDark = body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcon(isDark);
+        });
+
+        function updateThemeIcon(isDark) {
+            if (isDark) {
+                themeToggle.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                `;
+            } else {
+                themeToggle.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                `;
+            }
+        }
+
+        // Password toggle for login
+        const togglePassword = document.getElementById('togglePassword');
+        const loginPasswordInput = document.getElementById('loginPassword');
+
+        togglePassword.addEventListener('click', function() {
+            const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            loginPasswordInput.setAttribute('type', type);
+
+            if (type === 'text') {
+                togglePassword.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <line x1="2" y1="2" x2="22" y2="22"></line>
+                    </svg>
+                `;
+            } else {
+                togglePassword.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
+            }
+        });
+
+        // Password toggle for signup
+        const toggleSignupPassword = document.getElementById('toggleSignupPassword');
+        const signupPasswordInput = document.getElementById('signupPassword');
+
+        toggleSignupPassword.addEventListener('click', function() {
+            const type = signupPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            signupPasswordInput.setAttribute('type', type);
+
+            if (type === 'text') {
+                toggleSignupPassword.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <line x1="2" y1="2" x2="22" y2="22"></line>
+                    </svg>
+                `;
+            } else {
+                toggleSignupPassword.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
+            }
+        });
+
+        // Printer animation
+        const paper = document.querySelector('.paper');
+        const dots = document.querySelectorAll('.dot');
+
+        function animatePrinter() {
+            paper.classList.add('printing');
+
+            let currentDot = 0;
+            const dotInterval = setInterval(() => {
+                dots.forEach((dot, index) => {
+                    if (index === currentDot) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                });
+                currentDot = (currentDot + 1) % dots.length;
+            }, 1000);
+
+            setTimeout(() => {
+                paper.classList.remove('printing');
+                clearInterval(dotInterval);
+                dots[0].classList.add('active');
+                dots[1].classList.remove('active');
+                dots[2].classList.remove('active');
+                setTimeout(animatePrinter, 3000);
+            }, 5000);
+        }
+
+        setTimeout(animatePrinter, 1000);
+
+        // Form submission handling
+        const loginForm = document.getElementById('loginFormInner');
+        const loginButton = document.getElementById('loginBtn');
+        const testLoginButton = document.getElementById('testLoginBtn');
+        const signupForm = document.getElementById('signupFormInner');
+        const signupButton = document.getElementById('signupBtn');
+
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            loginButton.classList.add('loading');
+            setTimeout(() => {
+                loginButton.classList.remove('loading');
+                document.getElementById('authView').classList.add('hidden');
+                document.getElementById('dashboardView').classList.remove('hidden');
+            }, 1500);
+        });
+
+        signupForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            signupButton.classList.add('loading');
+            setTimeout(() => {
+                signupButton.classList.remove('loading');
+                alert('Sign up successful! Please log in.');
+                toggleAuthForm();
+            }, 1500);
+        });
+
+        // Toggle between login and signup forms
+        function toggleAuthForm() {
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            loginForm.classList.toggle('hidden');
+            signupForm.classList.toggle('hidden');
+        }
+
+        // Add event listener to show settings view
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add ID to the settings nav item
+            const settingsNavItem = document.querySelector('.nav-item:has(a i.fa-cog)');
+            settingsNavItem.id = 'settingsNav';
+            
+            // Event listener for settings navigation
+            document.getElementById('settingsNav').addEventListener('click', () => {
+                // Hide all views
+                document.getElementById('printerView').style.display = 'none';
+                document.getElementById('transactionView').style.display = 'none';
+                document.getElementById('statisticsView').style.display = 'none';
+                
+                // Show settings view
+                const settingsView = document.getElementById('settingsView');
+                settingsView.style.display = 'block';
+                
+                // Update active nav item
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                document.getElementById('settingsNav').classList.add('active');
+            });
+            
+            // Settings tab navigation
+            document.querySelectorAll('.settings-menu-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const tabId = item.getAttribute('data-tab');
+                    
+                    // Update active tab
+                    document.querySelectorAll('.settings-menu-item').forEach(tab => tab.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    // Show selected content
+                    document.querySelectorAll('.settings-tab').forEach(content => content.classList.remove('active'));
+                    document.getElementById(tabId + 'Tab').classList.add('active');
+                });
+            });
+            
+            // Document upload handling
+            document.querySelectorAll('.document-upload').forEach(upload => {
+                upload.addEventListener('click', () => {
+                    const fileInput = upload.querySelector('.file-input');
+                    fileInput.click();
+                });
+                
+                const fileInput = upload.querySelector('.file-input');
+                fileInput.addEventListener('change', (event) => {
+                    if (event.target.files.length > 0) {
+                        const file = event.target.files[0];
+                        const documentType = upload.getAttribute('data-type');
+                        const previewContainer = document.getElementById(documentType + 'Preview');
+                        
+                        // Create document item
+                        const documentItem = document.createElement('div');
+                        documentItem.className = 'document-item';
+                        documentItem.innerHTML = `
+                          <span class="document-name">${file.name}</span>
+                          <span class="document-remove"><i class="fas fa-times"></i></span>
+                        `;
+                        
+                        // Add remove functionality
+                        documentItem.querySelector('.document-remove').addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            documentItem.remove();
+                            fileInput.value = '';
+                        });
+                        
+                        // Clear previous preview and add new one
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(documentItem);
+                    }
+                });
+            });
+            
+            // Connect completeKycBtn to show the KYC tab in settings
+            document.getElementById('completeKycBtn').addEventListener('click', () => {
+                // Hide KYC overlay
+                document.getElementById('kycOverlay').classList.add('hidden');
+                
+                // Show dashboard and enable interactions
+                document.getElementById('dashboardView').style.pointerEvents = '';
+                
+                // Show settings view with KYC tab active
+                document.getElementById('printerView').style.display = 'none';
+                document.getElementById('transactionView').style.display = 'none';
+                document.getElementById('statisticsView').style.display = 'none';
+                
+                const settingsView = document.getElementById('settingsView');
+                settingsView.style.display = 'block';
+                
+                // Activate settings nav item
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                document.getElementById('settingsNav').classList.add('active');
+                
+                // Show KYC tab
+                document.querySelectorAll('.settings-menu-item').forEach(tab => tab.classList.remove('active'));
+                document.querySelector('.settings-menu-item[data-tab="kyc"]').classList.add('active');
+                
+                document.querySelectorAll('.settings-tab').forEach(content => content.classList.remove('active'));
+                document.getElementById('kycTab').classList.add('active');
+            });
+
+            // Remove conflicting eventListener on testLoginBtn from HTML
+            const testLoginBtn = document.getElementById('testLoginBtn');
+            if (testLoginBtn) {
+                const newButton = testLoginBtn.cloneNode(true);
+                testLoginBtn.parentNode.replaceChild(newButton, testLoginBtn);
+            }
+        });
+    </script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+    <script src="renderer.js"></script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92da6515c90cb056',t:'MTc0NDIwNTgwMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+</body>
+</html>

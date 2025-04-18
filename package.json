@@ -1,0 +1,79 @@
+{
+  "name": "ctrlp-ui-plus-backend",
+  "version": "1.0.0",
+  "description": "CtrlP UI+ Backend and Dashboard",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "test": "jest"
+  },
+  "author": "CtrlP Team",
+  "license": "ISC",
+  "build": {
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.ctrlp.co.in"
+      }
+    ],
+    "appId": "com.ctrlp.uiplus",
+    "productName": "CtrlP UI+",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "main.js",
+      "package.json",
+      "renderer.js",
+      "index.html",
+      ".env",
+      "icon.jpg",
+      "blue.png",
+      "white.png",
+      "styles.css"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.jpg"
+    },
+    "linux": {
+      "target": "deb"
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "chart.js": "^4.2.1",
+    "date-fns": "^2.29.3",
+    "electron-is-dev": "^2.0.0",
+    "electron-updater": "^6.6.2",
+    "pdf-lib": "^1.17.1",
+    "pdf-to-printer": "^5.6.0",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.10.0",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "electron": "^24.1.2",
+    "electron-builder": "^26.0.12",
+    "electron-reload": "^2.0.0-alpha.1",
+    "jest": "^29.5.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
