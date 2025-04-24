@@ -728,7 +728,7 @@ async function printJobWithWrappers(filePath, printOptions, job) {
     // Check if we need special handling for landscape or duplex
     const needsSpecialHandling = 
       printOptions.orientation === "landscape" || 
-      (job.duplex && job.duplex !== "simplex");
+      (job.duplex && job.duplex !== "simplex") || printOptions.copies > 1;
 
     if (needsSpecialHandling) {
       // Print the first page (cover invoice) with default settings
