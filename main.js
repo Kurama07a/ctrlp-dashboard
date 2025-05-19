@@ -11,19 +11,23 @@ const execAsync = util.promisify(exec);
 const { PDFDocument } = require("pdf-lib");
 // const electronReload = require("electron-reload"); // Added for hot reloading
 const { autoUpdater } = require('electron-updater');
-// Enable hot reloading
+const SessionManager = require('./sessionManager'); // Added for session management
 
+// Enable hot reloading
 
 const FIXED_PAPER_SIZES = ["A4", "A3", "Letter", "Legal"];
 const JOB_HISTORY_FILE = path.join(app.getPath("userData"), "jobHistory.json");
 const METRICS_FILE = path.join(app.getPath("userData"), "metrics.json");
 const DAILY_METRICS_FILE = path.join(app.getPath("userData"), "dailyMetrics.json");
 const PRINTER_INFO_FILE = path.join(app.getPath("userData"), "printerInfo.json");
-const SUPABASE_URL = "https://gtcqilbysfgbpitzjulg.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0Y3FpbGJ5c2ZnYnBpdHpqdWxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwMjQ4ODYsImV4cCI6MjA1NjYwMDg4Nn0.kVEvamqmWXaZoFK8qoKtSnP5acTO0y3HLv_Hf9muL7o";
-const BUCKET_NAME = "combined-pdfs";
-const WEBSOCKET_URL = "ws://ws.ctrlp.co.in:3001"; // Replace with your WebSocket URL
+// Load environment variables from .env file if present
+require('dotenv').config();
+
+// Use environment variables with fallbacks for development
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY ;
+const BUCKET_NAME = process.env.BUCKET_NAME ;
+const WEBSOCKET_URL = process.env.WEBSOCKET_URL;
 const TEMP_DIR = path.join(app.getPath("temp"), "CtrlP"); // Change download directory to temp in appdata
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -45,10 +49,21 @@ let printerQueues = new Map();
 let isConnected = false;
 let currentShopId = null;
 let currentSecret = null;
+let currentUser = null; // Added for session management
+let sessionManager; // Added for session management
 
 function log(message) {
   console.log(`[${new Date().toISOString()}] ${message}`);
   if (mainWindow) mainWindow.webContents.send("log-message", message);
+}
+
+// Add a helper for KYC logging
+function logKyc(message, data) {
+  const msg = `[KYC] ${message}` + (data ? ` | ${JSON.stringify(data)}` : '');
+  console.log(msg);
+  try {
+    if (mainWindow) mainWindow.webContents.send('log-message', msg);
+  } catch (e) {}
 }
 
 async function getLastPageNumber(filePath) {
@@ -183,7 +198,7 @@ function updateDailyMetrics(job) {
         totalIncome: 0,
       };
     }
-    const pagesUsed = job.number_of_pages * job.copies;
+    const pagesUsed = job.number_of_pages;
     dailyMetrics[today].totalPages += pagesUsed;
     if (job.color_mode.toLowerCase() === "color") {
       dailyMetrics[today].colorJobs++;
@@ -198,7 +213,7 @@ function updateDailyMetrics(job) {
 
 function updateMetrics(job) {
   if (job.print_status === "completed") {
-    const pagesUsed = job.number_of_pages * job.copies;
+    const pagesUsed = job.number_of_pages;
     metrics.totalPages += pagesUsed;
     if (job.color_mode.toLowerCase() === "color") {
       metrics.colorJobs++;
@@ -215,21 +230,30 @@ function updateMetrics(job) {
 async function detectPrinterCapabilities(printerName) {
   const platform = process.platform;
   let capabilities = {
-    color: true,
-    duplex: false,
-    paperSizes: new Set(FIXED_PAPER_SIZES),
-    maxCopies: 999,
-    supportedResolutions: ["300dpi"],
+      color: true,
+      duplex: false,
+      paperSizes: new Set(FIXED_PAPER_SIZES),
+      maxCopies: 999,
+      supportedResolutions: ["300dpi"],
+      // Job routing flags - defaults to allowing all job types
+      colorJobsOnly: false,
+      monochromeJobsOnly: false,
+      duplexJobsOnly: false,
+      simplexJobsOnly: false
   };
 
   try {
-    if (platform === "win32") {
-      capabilities = await detectWindowsCapabilities(printerName);
-    } else if (platform === "linux") {
-      capabilities = await detectLinuxCapabilities(printerName);
-    }
+      if (platform === "win32") {
+          const windowsCaps = await detectWindowsCapabilities(printerName);
+          capabilities = { ...capabilities, ...windowsCaps };
+      } else if (platform === "linux") {
+          const linuxCaps = await detectLinuxCapabilities(printerName);
+          capabilities = { ...capabilities, ...linuxCaps };
+      } else if (platform === "darwin") {
+          // Add macOS capability detection if needed
+      }
   } catch (error) {
-    log(`Error detecting capabilities for ${printerName}: ${error.message}`);
+      log(`Error detecting capabilities for ${printerName}: ${error.message}`);
   }
 
   return capabilities;
@@ -446,8 +470,8 @@ function addOrUpdateJobInHistory(job, printerName, status) {
     print_status: status,
     processed_timestamp: new Date().toISOString(),
     shop_id: currentShopId,
-    pages_printed: job.number_of_pages,
-    total_pages: job.number_of_pages * job.copies,
+    pages_printed: job.number_of_pages+2,
+    total_pages: job.number_of_pages,
   };
 
   jobHistory.set(job.id, jobEntry);
@@ -519,40 +543,93 @@ class JobScheduler {
     return bestPrinter;
   }
 
-  filterValidPrinters(printers, job) {
-    return printers.filter((printer) => {
-      const caps = printerInfo.capabilities[printer.name];
-      const paperLevels = printerInfo.paperLevels[printer.name];
-      const pagesNeeded = (job.number_of_pages+2) * job.copies;
+// Replace the existing filterValidPrinters method in JobScheduler class
 
-      return (
-        caps &&
-        paperLevels &&
-        !printerInfo.discardedPrinters.includes(printer.name) &&
-        caps.paperSizes.has(job.paper_size) &&
-        paperLevels[job.paper_size] >= pagesNeeded &&
-        (job.color_mode.toLowerCase() !== "color" || caps.color) &&
-        (job.duplex === "simplex" || caps.duplex)
-      );
-    });
-  }
+filterValidPrinters(printers, job) {
+  return printers.filter((printer) => {
+    const caps = printerInfo.capabilities[printer.name];
+    const paperLevels = printerInfo.paperLevels[printer.name];
+    const pagesNeeded = (job.number_of_pages + 2);
 
-  findBestPrinter(printers, job) {
-    const scoredPrinters = printers.map((printer) => {
-      const caps = printerInfo.capabilities[printer.name];
-      const paperLevel = printerInfo.paperLevels[printer.name][job.paper_size] || 0;
-      const queueLength = printerQueues.get(printer.name)?.length || 0;
+    // Basic capability checks
+    if (!caps || 
+        !paperLevels || 
+        printerInfo.discardedPrinters.includes(printer.name) ||
+        !caps.paperSizes.has(job.paper_size) || 
+        paperLevels[job.paper_size] < pagesNeeded) {
+      return false;
+    }
+    
+    // Color capability checks
+    if (job.color_mode.toLowerCase() === "color" && !caps.color) {
+      return false;
+    }
+    
+    // Duplex capability checks
+    if (job.duplex !== "simplex" && !caps.duplex) {
+      return false;
+    }
+    
+    // Job routing rule checks
+    if (caps.colorJobsOnly && job.color_mode.toLowerCase() !== "color") {
+      return false;
+    }
+    
+    if (caps.monochromeJobsOnly && job.color_mode.toLowerCase() === "color") {
+      return false;
+    }
+    
+    if (caps.duplexJobsOnly && job.duplex === "simplex") {
+      return false;
+    }
+    
+    if (caps.simplexJobsOnly && job.duplex !== "simplex") {
+      return false;
+    }
+    
+    return true;
+  });
+}
 
-      let score = paperLevel / 1000 - queueLength * 0.5;
-      if (caps.color && job.color_mode.toLowerCase() === "color") score += 0.2;
-      if (caps.duplex && job.duplex !== "simplex") score += 0.2;
+// Replace the existing findBestPrinter method in JobScheduler class
 
-      return { printer, score };
-    });
+findBestPrinter(printers, job) {
+  const scoredPrinters = printers.map((printer) => {
+    const caps = printerInfo.capabilities[printer.name];
+    const paperLevel = printerInfo.paperLevels[printer.name][job.paper_size] || 0;
+    const queueLength = printerQueues.get(printer.name)?.length || 0;
 
-    scoredPrinters.sort((a, b) => b.score - a.score);
-    return scoredPrinters[0]?.printer || null;
-  }
+    // Skip this printer if it doesn't match our job routing rules
+    if (caps.colorJobsOnly && job.color_mode.toLowerCase() !== "color") {
+      return { printer, score: -1000 }; // Very negative score to ensure it's not selected
+    }
+    
+    if (caps.monochromeJobsOnly && job.color_mode.toLowerCase() === "color") {
+      return { printer, score: -1000 };
+    }
+    
+    if (caps.duplexJobsOnly && job.duplex === "simplex") {
+      return { printer, score: -1000 };
+    }
+    
+    if (caps.simplexJobsOnly && job.duplex !== "simplex") {
+      return { printer, score: -1000 };
+    }
+
+    let score = paperLevel / 1000 - queueLength * 0.5;
+    if (caps.color && job.color_mode.toLowerCase() === "color") score += 0.2;
+    if (caps.duplex && job.duplex !== "simplex") score += 0.2;
+
+    return { printer, score };
+  });
+
+  scoredPrinters.sort((a, b) => b.score - a.score);
+  
+  // Filter out printers with negative scores (those that don't match routing rules)
+  const validPrinters = scoredPrinters.filter(p => p.score >= 0);
+  
+  return validPrinters.length > 0 ? validPrinters[0].printer : null;
+}
 
   async processQueue(printerName) {
     if (this.queueLocks.get(printerName)) {
@@ -609,7 +686,7 @@ class JobScheduler {
       log(`Printing job ${job.id} with options: ${JSON.stringify(printOptions)}`);
       await printJobWithWrappers(filePath, printOptions, job);
 
-      updatePaperLevels(printerName, job.paper_size, -(job.number_of_pages * job.copies));
+      updatePaperLevels(printerName, job.paper_size, (-(job.number_of_pages)-2));
 
       const queue = printerQueues.get(printerName);
       queue.shift();
@@ -904,6 +981,7 @@ function sendMessage(type, data) {
   }
 }
 
+// Modify handleLogin to save user session
 async function handleLogin(event, { email, password }) {
   try {
     const { data: account, error: accountError } = await supabase
@@ -937,7 +1015,12 @@ async function handleLogin(event, { email, password }) {
       email: account.email,
       shop_id: account.shop_id || null,
       kyc_verified,
+      secret: account.secret // Store the secret for session restoration
     };
+
+    // Save the user session
+    sessionManager.saveSession(user);
+    currentUser = user;
 
     event.reply("auth-success", user);
     log(`User logged in: ${user.email}, KYC verified: ${kyc_verified}`);
@@ -955,6 +1038,7 @@ async function handleLogin(event, { email, password }) {
   }
 }
 
+// Also update the test login to save session
 async function handleTestLogin(event) {
   try {
     const user = {
@@ -963,11 +1047,16 @@ async function handleTestLogin(event) {
       email: "test@ctrlp.com",
       shop_id: "test-shop-id",
       kyc_verified: true,
-      isTestUser: true
+      isTestUser: true,
+      secret: "test-secret"
     };
 
+    // Save the test user session
+    sessionManager.saveSession(user);
+    currentUser = user;
+
     currentShopId = user.shop_id;
-    currentSecret = "test-secret";
+    currentSecret = user.secret;
 
     event.reply("auth-success", user);
     log(`Test user logged in: ${user.email}`);
@@ -978,6 +1067,20 @@ async function handleTestLogin(event) {
     log(`Test login error: ${error.message}`);
     event.reply("auth-error", error.message || "Test login failed");
   }
+}
+
+// Update handleSignOut to clear the session
+function handleSignOut(event) {
+  currentShopId = null;
+  currentSecret = null;
+  currentUser = null;
+  
+  // Clear the saved session
+  sessionManager.clearSession();
+  
+  closeWebSocket();
+  event.reply("sign-out-success");
+  log("User signed out");
 }
 
 async function handleSignup(event, { email, password }) {
@@ -1004,14 +1107,6 @@ async function handleSignup(event, { email, password }) {
     log(`Signup error: ${error.message}`);
     event.reply("auth-error", error.message);
   }
-}
-
-function handleSignOut(event) {
-  currentShopId = null;
-  currentSecret = null;
-  closeWebSocket();
-  event.reply("sign-out-success");
-  log("User signed out");
 }
 
 async function handleSaveKycData(event, formData) {
@@ -1204,6 +1299,7 @@ async function updateShopInfo(updatedInfo) {
 
 // main.js
 async function uploadDocumentToBucket(bucketName, filePath, fileName) {
+  logKyc(`Uploading document to bucket`, { bucketName, filePath, fileName });
   try {
       console.log(`Uploading to bucket: ${bucketName}, filePath: ${filePath}, fileName: ${fileName}`);
       if (!filePath || !fs.existsSync(filePath)) {
@@ -1230,18 +1326,19 @@ async function uploadDocumentToBucket(bucketName, filePath, fileName) {
           });
 
       if (error) {
-          console.error(`Supabase upload error: ${error.message}`);
+          logKyc(`Supabase upload error: ${error.message}`);
           throw error;
       }
 
-      console.log(`Uploaded ${fileName} to ${bucketName}: ${data.path}`);
+      logKyc(`Uploaded ${fileName} to ${bucketName}: ${data.path}`);
       return data.path;
   } catch (error) {
-      console.error(`Error uploading to ${bucketName}: ${error.message}`);
+      logKyc(`Error uploading to ${bucketName}: ${error.message}`);
       throw error;
   }
 }
 ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
+  logKyc('Received submit-kyc-data IPC call', kycData);
   try {
       console.log('Received KYC data:', kycData);
 
@@ -1249,6 +1346,7 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
       const requiredFields = [ 'address', 'aadhaar', 'pan_card_path', 'bank_proof_path', 'passport_photo_path'];
       for (const field of requiredFields) {
           if (!kycData[field]) {
+              logKyc(`Missing required field: ${field}`);
               throw new Error(`Missing required field: ${field}`);
           }
       }
@@ -1257,6 +1355,7 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
       const fileFields = ['aadhaar', 'pan_card_path', 'bank_proof_path', 'passport_photo_path'];
       for (const field of fileFields) {
           if (!fs.existsSync(kycData[field])) {
+              logKyc(`File not found: ${kycData[field]}`);
               throw new Error(`File not found: ${kycData[field]}`);
           }
       }
@@ -1269,7 +1368,7 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
           .single();
 
       if (accountError || !shopAccount) {
-          console.error('Shop account error:', accountError?.message || 'No account found');
+          logKyc('Shop account error', accountError?.message || 'No account found');
           throw new Error('Shop account not found');
       }
 
@@ -1289,8 +1388,9 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
           const filePath = kycData[field];
           const docType = field === 'aadhar' ? 'aadhaar-front' : field.replace('_path', '');
           const fileName = `${identifier}-${docType}`;
+          logKyc(`Uploading document: ${field} to bucket: ${bucket}`);
           uploadedPaths[field] = await uploadDocumentToBucket(bucket, filePath, fileName);
-          console.log(`Uploaded ${field} to ${bucket}: ${uploadedPaths[field]}`);
+          logKyc(`Uploaded ${field} to ${bucket}: ${uploadedPaths[field]}`);
       }
 
       // Prepare KYC payload
@@ -1310,6 +1410,8 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
           updated_at: new Date().toISOString(),
       };
 
+      logKyc('Updating shop_accounts with KYC payload', kycPayload);
+
       // Update shop account
       const { error: updateError } = await supabase
           .from('shop_accounts')
@@ -1317,14 +1419,14 @@ ipcMain.handle('submit-kyc-data', async (_event, kycData) => {
           .eq('id', shopId);
 
       if (updateError) {
-          console.error('Error updating KYC data:', updateError.message);
+          logKyc('Error updating KYC data', updateError.message);
           throw updateError;
       }
 
-      console.log('KYC data submitted successfully');
+      logKyc('KYC data submitted successfully');
       return { success: true };
   } catch (error) {
-      console.error('Error submitting KYC data:', error.message);
+      logKyc('Error submitting KYC data', error.message);
       return { success: false, error: error.message };
   }
 });
@@ -1345,7 +1447,50 @@ function createMainWindow() {
   mainWindow.loadFile("index.html");
 }
 
+// Update the checkForSavedSession function
+async function checkForSavedSession() {
+  try {
+    const savedUser = sessionManager.loadSession();
+    if (savedUser) {
+      log('Found saved user session, attempting to restore...');
+      currentUser = savedUser;
+      currentShopId = savedUser.shop_id || null;
+      currentSecret = savedUser.secret;
+      
+      // Restore user session in the renderer
+      mainWindow.webContents.on('did-finish-load', () => {
+        log('Restoring user session in renderer');
+        mainWindow.webContents.send('auth-success', savedUser);
+        
+        if (savedUser.kyc_verified) {
+          mainWindow.webContents.send('kyc-verified');
+        } else {
+          mainWindow.webContents.send('kyc-required');
+        }
+        
+        fetchShopInfo(savedUser.email);
+      });
+    } else {
+      // No session found, notify renderer
+      mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('session-check-complete');
+      });
+    }
+  } catch (error) {
+    log(`Error restoring user session: ${error.message}`);
+    sessionManager.clearSession();
+    
+    // Error occurred, notify renderer
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.send('session-check-complete');
+    });
+  }
+}
+
 app.whenReady().then(async () => {
+  // Initialize session manager
+  sessionManager = new SessionManager(app);
+  
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     fetch: (url, options) => {
       options.duplex = "half"; // Add duplex option to support body in fetch
@@ -1360,25 +1505,134 @@ app.whenReady().then(async () => {
   loadMetrics();
   loadDailyMetrics();
 
-  autoUpdater.checkForUpdatesAndNotify();
+  // Check for saved session after window is created
+  checkForSavedSession();
 
-  autoUpdater.on("update-available", () => {
-    log("Update available. Downloading...");
-    mainWindow.webContents.send("update-available");
-  });
-
-  autoUpdater.on("update-downloaded", () => {
-    log("Update downloaded. Restarting...");
-    mainWindow.webContents.send("update-downloaded");
-    autoUpdater.quitAndInstall();
-  });
-
-  autoUpdater.on("error", (error) => {
-    log(`Update error: ${error.message}`);
-    mainWindow.webContents.send("update-error", error.message);
-  });
+  setupAutoUpdater();
 });
 
+// Update the setupAutoUpdater function
+function setupAutoUpdater() {
+    console.log("Setting up auto-updater...");
+    const isDev = require("electron-is-dev");
+    
+    // Configure logger
+    autoUpdater.logger = require("electron-log");
+    autoUpdater.logger.transports.file.level = "info";
+    
+    // Log helper
+    const logUpdate = (message) => {
+        console.log(`[Update] ${message}`);
+        if (mainWindow) {
+            mainWindow.webContents.send('log-message', `[Update] ${message}`);
+        }
+    };
+
+    if (isDev) {
+        logUpdate('Running in development mode - auto updates disabled');
+        console.log('Auto-updater disabled in development mode');
+        mainWindow?.webContents.send('update-status', { 
+            status: 'disabled',
+            reason: 'Development mode'
+        });
+        return;
+    }
+
+    // Production configuration
+    try {
+        autoUpdater.autoDownload = false;
+        autoUpdater.allowDowngrade = false;
+        autoUpdater.allowPrerelease = false;
+
+        // Event handlers
+        autoUpdater.on('checking-for-update', () => {
+            logUpdate('Checking for updates...');
+            mainWindow?.webContents.send('update-status', { status: 'checking' });
+        });
+
+        autoUpdater.on('update-available', (info) => {
+            logUpdate(`Update available: ${info.version}`);
+            mainWindow?.webContents.send('update-status', { 
+                status: 'available',
+                info: info
+            });
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Update Available',
+                message: `Version ${info.version} is available. Would you like to download it?`,
+                buttons: ['Yes', 'No']
+            }).then(({response}) => {
+                if (response === 0) {
+                    autoUpdater.downloadUpdate();
+                }
+            });
+        });
+
+        autoUpdater.on('update-not-available', (info) => {
+            logUpdate('No updates available');
+            mainWindow?.webContents.send('update-status', { 
+                status: 'not-available',
+                info: info
+            });
+        });
+
+        autoUpdater.on('error', (err) => {
+            logUpdate(`Error in auto-updater: ${err.message}`);
+            mainWindow?.webContents.send('update-status', { 
+                status: 'error',
+                error: err.message
+            });
+        });
+
+        autoUpdater.on('download-progress', (progressObj) => {
+            const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
+            logUpdate(message);
+            mainWindow?.webContents.send('update-status', { 
+                status: 'downloading',
+                progress: progressObj
+            });
+        });
+
+        autoUpdater.on('update-downloaded', (info) => {
+            logUpdate(`Update downloaded: ${info.version}`);
+            mainWindow?.webContents.send('update-status', { 
+                status: 'downloaded',
+                info: info
+            });
+
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                buttons: ['Restart Now', 'Later'],
+                title: 'Update Ready',
+                message: 'A new version has been downloaded. Restart to install?',
+                detail: `Version ${info.version} is ready to install.`
+            }).then(({response}) => {
+                if (response === 0) {
+                    autoUpdater.quitAndInstall(true, true);
+                }
+            });
+        });
+
+        // Initial check
+        logUpdate('Performing initial update check...');
+        autoUpdater.checkForUpdates().catch(err => {
+            logUpdate(`Initial update check failed: ${err.message}`);
+        });
+
+        // Check every hour
+        setInterval(() => {
+            logUpdate('Performing scheduled update check...');
+            autoUpdater.checkForUpdates().catch(err => {
+                logUpdate(`Scheduled update check failed: ${err.message}`);
+            });
+        }, 60 * 60 * 1000);
+
+    } catch (error) {
+        logUpdate(`Error setting up auto-updater: ${error.message}`);
+    }
+}
+
+// ipcMain handlers
 function setupIpcHandlers() {
   ipcMain.handle("get-printers", getPrinters);
   ipcMain.on("update-discarded-printers", updateDiscardedPrinters);
@@ -1442,6 +1696,138 @@ function setupIpcHandlers() {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  });
+  // Add to main.js in the setupIpcHandlers function
+  ipcMain.handle("update-printer-capabilities", async (_event, capabilityChanges) => {
+    try {
+        // Process each printer's capability changes
+        for (const [printerName, changes] of Object.entries(capabilityChanges)) {
+            if (!printerInfo.capabilities[printerName]) {
+                log(`Warning: Trying to update capabilities for unknown printer: ${printerName}`);
+                continue;
+            }
+
+            // Update job routing rules
+            if (changes.capabilities) {
+                // Color job routing
+                if ('colorJobsOnly' in changes.capabilities) {
+                    printerInfo.capabilities[printerName].colorJobsOnly = changes.capabilities.colorJobsOnly;
+                }
+                
+                if ('monochromeJobsOnly' in changes.capabilities) {
+                    printerInfo.capabilities[printerName].monochromeJobsOnly = changes.capabilities.monochromeJobsOnly;
+                }
+                
+                // Duplex job routing
+                if ('duplexJobsOnly' in changes.capabilities) {
+                    printerInfo.capabilities[printerName].duplexJobsOnly = changes.capabilities.duplexJobsOnly;
+                }
+                
+                if ('simplexJobsOnly' in changes.capabilities) {
+                    printerInfo.capabilities[printerName].simplexJobsOnly = changes.capabilities.simplexJobsOnly;
+                }
+            }
+
+            // Update paper sizes if they've changed
+            if (changes.paperSizes && changes.paperSizes.length > 0) {
+                // Get the original physical paper sizes
+                const physicalPaperSizes = Array.from(printerInfo.capabilities[printerName].paperSizes);
+                
+                // Filter requested paper sizes to only include physically supported ones
+                const validPaperSizes = changes.paperSizes.filter(size => 
+                    physicalPaperSizes.includes(size)
+                );
+                
+                // Update the paper sizes
+                printerInfo.capabilities[printerName].paperSizes = new Set(validPaperSizes);
+
+                // Ensure paper levels exist for all supported paper sizes
+                validPaperSizes.forEach(size => {
+                    if (!printerInfo.paperLevels[printerName][size]) {
+                        printerInfo.paperLevels[printerName][size] = 0;
+                    }
+                });
+            }
+        }
+
+        // Save the updated printerInfo
+        savePrinterInfo();
+        log('Printer capabilities updated successfully');
+
+        // Notify renderer about the updated printer info
+        mainWindow.webContents.send("printer-info-updated", {
+            printerInfo,
+            printerQueues: Object.fromEntries(printerQueues)
+        });
+
+        // Update the shop's technical info (supported settings)
+        updateShopTechnicalInfo();
+        
+        return { success: true };
+        
+    } catch (error) {
+        log(`Error updating printer capabilities: ${error.message}`);
+        return { success: false, error: error.message };
+    }
+});
+ipcMain.on("update-printer-capabilities", (_event, capabilityChanges) => {
+  try {
+      // Process each printer's capability changes
+      for (const [printerName, changes] of Object.entries(capabilityChanges)) {
+          if (!printerInfo.capabilities[printerName]) {
+              log(`Warning: Trying to update capabilities for unknown printer: ${printerName}`);
+              continue;
+          }
+
+          // Update basic capabilities
+          for (const [capability, value] of Object.entries(changes.capabilities)) {
+              printerInfo.capabilities[printerName][capability] = value;
+          }
+
+          // Update paper sizes if they've changed
+          if (changes.paperSizes && changes.paperSizes.length > 0) {
+              printerInfo.capabilities[printerName].paperSizes = new Set(changes.paperSizes);
+
+              // Update paper levels for new paper sizes
+              changes.paperSizes.forEach(size => {
+                  if (!printerInfo.paperLevels[printerName][size]) {
+                      printerInfo.paperLevels[printerName][size] = 0;
+                  }
+              });
+
+              // Remove paper levels for removed paper sizes
+              Object.keys(printerInfo.paperLevels[printerName]).forEach(size => {
+                  if (!changes.paperSizes.includes(size)) {
+                      delete printerInfo.paperLevels[printerName][size];
+                  }
+              });
+          }
+      }
+
+      // Save the updated printerInfo
+      savePrinterInfo();
+      log('Printer capabilities updated successfully');
+
+      // Notify renderer about the updated printer info
+      mainWindow.webContents.send("printer-info-updated", {
+          printerInfo,
+          printerQueues: Object.fromEntries(printerQueues)
+      });
+
+      // Update the shop's technical info (supported settings)
+      updateShopTechnicalInfo();
+      
+  } catch (error) {
+      log(`Error updating printer capabilities: ${error.message}`);
+  }
+});
+
+  // Add this line to the existing handlers
+  ipcMain.handle("check-session-status", () => {
+    return {
+      hasSession: !!currentUser,
+      user: currentUser
+    };
   });
 }
 

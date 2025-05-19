@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded and parsed');
     initializeAuthUI();
     setupAuthEventListeners();
-    //initializeCarousel();
     setupSettingsDropdown();
     fetchShopInfo();
     loadDailyMetrics();
@@ -43,20 +42,51 @@ async function fetchShopInfo() {
     }
 }
 
+// Update the initializeAuthUI function to store a reference to the loading indicator
 function initializeAuthUI() {
-    if (currentUser) {
-        showDashboard();
-    } else {
-        showAuthView();
+    showAuthView();
+    
+    // Remove any existing loading indicator first
+    const existingLoader = document.querySelector('.auth-loading');
+    if (existingLoader) {
+        existingLoader.remove();
     }
+    
+    // Add a loading indicator to the auth view
+    const authView = document.getElementById('authView');
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'auth-loading';
+    loadingIndicator.id = 'authLoadingIndicator';
+    loadingIndicator.innerHTML = `
+        <div class="loading-spinner"></div>
+        <p>Checking for saved session...</p>
+    `;
+    authView.appendChild(loadingIndicator);
+    
+    // Set a timeout to remove the indicator if it takes too long
+    setTimeout(() => {
+        const indicator = document.getElementById('authLoadingIndicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }, 5000); // Remove after 5 seconds if no response
 }
 
 function setupAuthEventListeners() {
-    document.getElementById('loginBtn').addEventListener('click', () => {
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        ipcRenderer.send('login', { email, password });
-    });
+    const loginForm = document.getElementById('loginFormInner');
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            // Add loading state to button
+            const loginButton = document.getElementById('loginBtn');
+            if (loginButton) loginButton.classList.add('loading');
+            
+            ipcRenderer.send('login', { email, password });
+        });
+    }
 
     document.getElementById('signupBtn').addEventListener('click', () => {
         const email = document.getElementById('signupEmail').value;
@@ -102,43 +132,8 @@ function showDashboard() {
     loadDailyMetrics();
 }
 
-function initializeCarousel() {
-    const infoCards = [
-        { title: "Welcome to CTRL+P", text: "A powerful print management solution for your business." },
-        { title: "Smart Scheduling", text: "Automatically assigns jobs to the best available printer." },
-        { title: "Real-time Metrics", text: "Track your printing stats and revenue instantly." },
-    ];
-
-    let currentIndex = 0;
-    const carousel = document.getElementById('infoCarousel');
-    const dotsContainer = document.getElementById('carouselDots');
-
-    function updateCarousel() {
-
-        updateDots();
-    }
-
-    function updateDots() {
-        dotsContainer.innerHTML = infoCards.map((_, i) => `
-            <div class="dot ${i === currentIndex ? 'active' : ''}" onclick="changeCarousel(${i})"></div>
-        `).join('');
-    }
-
-    window.changeCarousel = (index) => {
-        currentIndex = index;
-        updateCarousel();
-    };
-
-    //updateCarousel();
-    setInterval(() => {
-        currentIndex = (currentIndex + 1) % infoCards.length;
-        //updateCarousel();
-    }, 5000);
-}
-
 function initializeUI() {
     updateButtonText();
-    // renderMetrics();
     renderDailyMetrics();
     
     // Make sure metrics are only visible in printer view
@@ -155,7 +150,6 @@ async function loadMetrics() {
         if (response && typeof response === 'object') {
             metrics = response;
             console.log('Metrics loaded in renderer:', metrics);
-            // renderMetrics();
         } else {
             console.error('Invalid metrics response:', response);
             showNotification('Failed to load metrics', 'error');
@@ -167,9 +161,41 @@ async function loadMetrics() {
 }
 
 document.getElementById('checkForUpdates').addEventListener('click', () => {
+    console.log('Check for updates button clicked');
     ipcRenderer.send('check-for-updates');
+    showNotification('Checking for updates...', 'info');
   });
-
+ipcRenderer.on('update-status', (_event, data) => {
+    console.log('[Update] Status:', data);
+    
+    switch(data.status) {
+        case 'checking':
+            showNotification('Checking for updates...', 'info');
+            break;
+            
+        case 'available':
+            showNotification(`Update available: version ${data.info.version}`, 'info');
+            break;
+            
+        case 'not-available':
+            showNotification('You have the latest version!', 'success');
+            break;
+            
+        case 'downloading':
+            const progress = Math.round(data.progress.percent);
+            showNotification(`Downloading update: ${progress}%`, 'info');
+            break;
+            
+        case 'downloaded':
+            showNotification('Update downloaded and ready to install', 'success');
+            break;
+            
+        case 'error':
+            showNotification(`Update error: ${data.error}`, 'error');
+            console.error('[Update] Error:', data.error);
+            break;
+    }
+});
 async function loadDailyMetrics() {
     try {
         const response = await ipcRenderer.invoke("get-daily-metrics");
@@ -467,6 +493,7 @@ function setupEventListeners() {
 
     // KYC modal overlay handling
     document.getElementById('kycStatusBtn')?.addEventListener('click', () => {
+        logKyc('KYC Status button clicked');
         const kycOverlayModal = document.getElementById('kycOverlayModal');
         kycOverlayModal.classList.remove('hidden');
         document.body.style.overflow = 'hidden'; // Prevent scrolling of background
@@ -475,23 +502,28 @@ function setupEventListeners() {
     // Close KYC modal buttons
     document.querySelectorAll('.close-kyc-modal, .close-kyc-modal-btn').forEach(button => {
         button.addEventListener('click', () => {
+            logKyc('KYC modal close button clicked');
             document.getElementById('kycOverlayModal').classList.add('hidden');
             document.body.style.overflow = ''; // Restore scrolling
         });
     });
 
     // Submit KYC from overlay modal
-    document.getElementById('submitKycOverlayBtn')?.addEventListener('click', submitKycFormFromOverlay);
+    document.getElementById('submitKycOverlayBtn')?.addEventListener('click', () => {
+        logKyc('Submit KYC button clicked');
+        submitKycFormFromOverlay();
+    });
     
     // View KYC details button
     document.getElementById('viewKycDetailsBtn')?.addEventListener('click', () => {
-        // You could either open the KYC modal in read-only mode or navigate to a details page
+        logKyc('View KYC Details button clicked');
         document.getElementById('kycOverlayModal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     });
     
     // Update KYC button
     document.getElementById('updateKycBtn')?.addEventListener('click', () => {
+        logKyc('Update KYC button clicked');
         document.getElementById('kycOverlayModal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     });
@@ -509,9 +541,6 @@ function setupEventListeners() {
         });
     });
 
-    // Save shop info button
-    //document.getElementById('saveShopInfoBtn')?.addEventListener('click', saveShopInfo);
-
     document.addEventListener('click', (e) => {
         if (e.target.classList.contains('add-paper-btn')) {
             const [printerName, paperSize, amount] = e.target.dataset.info.split('|');
@@ -522,113 +551,454 @@ function setupEventListeners() {
             restorePrinter(e.target.dataset.printer);
         }
     });
-
-    // Document upload handling for all upload areas
-    //setupDocumentUploads();
 }
 
-// Function to handle KYC form submission from the overlay modal
-// renderer.js
-async function submitKycFormFromOverlay() {
-    try {
-        const requiredDocTypes = ['passport-photo', 'aadhaar-front', 'pan-card', 'bank-proof'];
-        const kycData = {
-            owner_name: document.getElementById('kycFullName').value,
-            address: document.getElementById('kycAddress').value,
-            state: document.getElementById('kycState').value,
-            account_holder_name: document.getElementById('kycAccountHolderName').value,
-            account_number: document.getElementById('kycAccountNumber').value,
-            ifsc_code: document.getElementById('kycIfscCode').value,
-            bank_name: document.getElementById('kycBankName').value,
-            branch_name : document.getElementById('kycBranchName').value,
+// Function to load and display printer capabilities
+function loadPrinterCapabilities() {
+    const printerSelector = document.getElementById('printerSelector');
+    const printerList = document.getElementById('printerList');
+    const capabilitiesContainer = document.getElementById('printerCapabilitiesContainer');
+    const saveBtn = document.getElementById('saveCapabilitiesBtn');
+    const backBtn = document.getElementById('backToPrinterListBtn');
+    
+    if (!printerSelector || !printerList || !capabilitiesContainer) return;
 
-        };
+    // Show the printer selector, hide capabilities container
+    printerSelector.classList.remove('hidden');
+    capabilitiesContainer.classList.add('hidden');
+    saveBtn.classList.add('hidden');
+    backBtn.classList.add('hidden');
 
-        // Validate and collect document paths
-        for (const docType of requiredDocTypes) {
-            const previewContainer = document.getElementById(`${docType}Preview`);
-            const documentItem = previewContainer?.querySelector('.document-item');
-            if (!documentItem || !documentItem.dataset.file) {
-                console.error(`Missing document for ${docType}`);
-                showNotification(`Please upload ${docType.replace('-', ' ')}`, 'error');
-                return;
-            }
-            // Map document types to kycData keys
-            if (docType === 'aadhaar-front') {
-                kycData.aadhaar = documentItem.dataset.file;
-            } else if (docType === 'pan-card') {
-                kycData.pan_card_path = documentItem.dataset.file;
-            } else if (docType === 'bank-proof') {
-                kycData.bank_proof_path = documentItem.dataset.file;
-            } else if (docType === 'passport-photo') {
-                kycData.passport_photo_path = documentItem.dataset.file;
-            }
-            console.log(`Attached ${docType}: ${documentItem.dataset.file}`);
+    // Show loading state
+    printerList.innerHTML = '<div class="printer-selector-loading"><div class="loading-spinner"></div>Loading printers...</div>';
+
+    // Get the refresh button and add loading state
+    const refreshBtn = document.getElementById('refreshCapabilitiesBtn');
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<span class="refresh-spinner"></span> Refreshing...';
+    }
+
+    ipcRenderer.invoke('get-printers').then(({ printers, printerInfo }) => {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
         }
 
-        // Validate required fields
-        if (!kycData.owner_name || !kycData.address) {
-            showNotification('Please fill in shop name and address', 'error');
+        if (!printers || printers.length === 0) {
+            printerList.innerHTML = `
+                <div class="no-printers-message" style="grid-column: 1 / -1; padding: 30px; text-align: center;">
+                    <i class="fas fa-print" style="font-size: 48px; opacity: 0.3; margin-bottom: 20px;"></i>
+                    <h3>No Printers Found</h3>
+                    <p>Please connect and configure printers before customizing capabilities.</p>
+                </div>`;
             return;
         }
 
-        console.log('Submitting KYC data:', kycData);
-        const response = await ipcRenderer.invoke('submit-kyc-data', kycData);
-        if (response.success) {
-            showNotification('KYC submitted successfully. Verification in progress.', 'success');
-            console.log('KYC submission successful:', response);
-            // Close the modal
-            document.getElementById('kycOverlayModal').classList.add('hidden');
-            document.body.style.overflow = '';
-            // Switch to KYC status tab
-            switchToKycStatusTab();
-        } else {
-            console.error('KYC submission failed:', response.error);
-            showNotification(`Failed to submit KYC: ${response.error}`, 'error');
+        printerList.innerHTML = '';
+        
+        // Create a card for each printer in the printer selector
+        printers.forEach(printer => {
+            const printerItem = document.createElement('div');
+            printerItem.className = 'printer-selector-item';
+            printerItem.dataset.printerName = printer.name;
+            
+            const isDiscarded = printerInfo.discardedPrinters.includes(printer.name);
+            const paperLevels = printerInfo.paperLevels[printer.name] || {};
+            
+            let totalPaper = 0;
+            let lowPaper = false;
+            
+            for (const [size, amount] of Object.entries(paperLevels)) {
+                totalPaper += amount;
+                if (amount < 10) lowPaper = true;
+            }
+            
+            printerItem.innerHTML = `
+                <h4>${printer.name}</h4>
+                <div class="printer-selector-item-subtitle">
+                    ${Object.entries(paperLevels).length} paper ${Object.entries(paperLevels).length === 1 ? 'size' : 'sizes'} · 
+                    ${totalPaper} sheets total
+                </div>
+                <div class="printer-selector-item-badges">
+                    ${printer.capabilities.color ? 
+                      '<span class="printer-badge color"><i class="fas fa-palette"></i> Color</span>' : 
+                      '<span class="printer-badge monochrome"><i class="fas fa-tint"></i> Monochrome</span>'}
+                    ${printer.capabilities.duplex ? 
+                      '<span class="printer-badge duplex"><i class="fas fa-copy"></i> Duplex</span>' : ''}
+                    ${isDiscarded ? 
+                      '<span class="printer-badge discarded"><i class="fas fa-ban"></i> Discarded</span>' : ''}
+                    ${lowPaper ? 
+                      '<span class="printer-badge"><i class="fas fa-exclamation-triangle"></i> Low Paper</span>' : ''}
+                </div>
+            `;
+            
+            printerItem.addEventListener('click', () => {
+                loadPrinterCapabilityDetails(printer.name);
+            });
+            
+            printerList.appendChild(printerItem);
+        });
+    }).catch(err => {
+        console.error('Error loading printer list:', err);
+        printerList.innerHTML = `
+            <div class="error-message" style="grid-column: 1 / -1; padding: 20px; text-align: center;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading printer list: ${err.message}</p>
+                <button id="retryPrinterListBtn" class="btn btn-secondary mt-20">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('retryPrinterListBtn')?.addEventListener('click', loadPrinterCapabilities);
+        
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
         }
-    } catch (error) {
-        console.error('Error submitting KYC:', error);
-        showNotification(`Error submitting KYC: ${error.message}`, 'error');
+    });
+}
+
+// Function to load the details for a specific printer
+function loadPrinterCapabilityDetails(printerName) {
+    const printerSelector = document.getElementById('printerSelector');
+    const capabilitiesContainer = document.getElementById('printerCapabilitiesContainer');
+    const saveBtn = document.getElementById('saveCapabilitiesBtn');
+    const backBtn = document.getElementById('backToPrinterListBtn');
+    
+    // Show loading state
+    capabilitiesContainer.classList.remove('hidden');
+    capabilitiesContainer.innerHTML = '<div class="loading-spinner">Loading printer capabilities...</div>';
+    
+    // Hide the printer selector
+    printerSelector.classList.add('hidden');
+    
+    // Show the save button and back button
+    saveBtn.classList.remove('hidden');
+    backBtn.classList.remove('hidden');
+    
+    // Add event listener to back button
+    backBtn.onclick = () => {
+        printerSelector.classList.remove('hidden');
+        capabilitiesContainer.classList.add('hidden');
+        saveBtn.classList.add('hidden');
+        backBtn.classList.add('hidden');
+    };
+
+    // Fetch the specific printer's capabilities
+    ipcRenderer.invoke('get-printers').then(({ printers, printerInfo }) => {
+        const printer = printers.find(p => p.name === printerName);
+        
+        if (!printer) {
+            capabilitiesContainer.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Printer "${printerName}" not found.</p>
+                    <button class="btn btn-secondary mt-20" id="backToListBtn">
+                        <i class="fas fa-arrow-left"></i> Back to Printer List
+                    </button>
+                </div>
+            `;
+            document.getElementById('backToListBtn').addEventListener('click', () => {
+                printerSelector.classList.remove('hidden');
+                capabilitiesContainer.classList.add('hidden');
+                saveBtn.classList.add('hidden');
+                backBtn.classList.add('hidden');
+            });
+            return;
+        }
+
+        // Create the capability card for this printer
+        const printerCard = document.createElement('div');
+        printerCard.className = 'printer-capability-card';
+        
+        // Card header
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'printer-capability-header';
+        cardHeader.innerHTML = `
+            <span>${printer.name}</span>
+            <div>
+                <span class="badge ${printerInfo.discardedPrinters.includes(printer.name) ? 'badge-danger' : 'badge-success'}">
+                    ${printerInfo.discardedPrinters.includes(printer.name) ? 'Discarded' : 'Active'}
+                </span>
+            </div>
+        `;
+        printerCard.appendChild(cardHeader);
+        
+        // Card content
+        const cardContent = document.createElement('div');
+        cardContent.className = 'printer-capability-content';
+        
+        // Physical capabilities section
+        const physicalCapabilities = document.createElement('div');
+        physicalCapabilities.className = 'capability-section';
+        physicalCapabilities.innerHTML = `
+            <h4>Physical Capabilities <span class="feature-flag">Cannot be modified</span></h4>
+            <div class="printer-capability-grid">
+                <div class="capability-toggle disabled">
+                    <label>
+                        <i class="fas fa-palette"></i> Color Printing
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" disabled ${printer.capabilities.color ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="capability-toggle disabled">
+                    <label>
+                        <i class="fas fa-copy"></i> Duplex Printing
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" disabled ${printer.capabilities.duplex ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <p class="capability-description">
+                These are the physical capabilities detected for this printer and cannot be modified.
+            </p>
+        `;
+        cardContent.appendChild(physicalCapabilities);
+        
+        // Job routing rules section
+        const jobRules = document.createElement('div');
+        jobRules.className = 'capability-section job-rules-container';
+        jobRules.innerHTML = `
+            <h4>Job Routing Rules</h4>
+            <p class="capability-description">
+                Configure which types of jobs this printer should accept.
+            </p>
+        `;
+        
+        // Only show color job options if the printer supports color
+        if (printer.capabilities.color) {
+            const colorRule = document.createElement('div');
+            colorRule.className = 'job-rule';
+            colorRule.innerHTML = `
+                <span class="rule-label"><i class="fas fa-palette"></i> Color Jobs:</span>
+                <select class="rule-select" id="color-rule-${printer.name}" data-printer="${printer.name}" data-rule="colorJobs">
+                    <option value="both" ${!printer.capabilities.colorJobsOnly && !printer.capabilities.monochromeJobsOnly ? 'selected' : ''}>Allow both color and monochrome jobs</option>
+                    <option value="colorOnly" ${printer.capabilities.colorJobsOnly ? 'selected' : ''}>Only accept color jobs</option>
+                    <option value="monoOnly" ${printer.capabilities.monochromeJobsOnly ? 'selected' : ''}>Only accept monochrome jobs</option>
+                </select>
+            `;
+            jobRules.appendChild(colorRule);
+        } else {
+            // For monochrome printers, add a fixed message
+            const monoMessage = document.createElement('div');
+            monoMessage.className = 'job-rule';
+            monoMessage.innerHTML = `
+                <span class="rule-label"><i class="fas fa-palette"></i> Color Jobs:</span>
+                <span style="flex: 1; padding: 8px; color: #666;">This printer only supports monochrome jobs</span>
+            `;
+            jobRules.appendChild(monoMessage);
+        }
+        
+        // Only show duplex job options if the printer supports duplex
+        if (printer.capabilities.duplex) {
+            const duplexRule = document.createElement('div');
+            duplexRule.className = 'job-rule';
+            duplexRule.innerHTML = `
+                <span class="rule-label"><i class="fas fa-copy"></i> Duplex Jobs:</span>
+                <select class="rule-select" id="duplex-rule-${printer.name}" data-printer="${printer.name}" data-rule="duplexJobs">
+                    <option value="both" ${!printer.capabilities.duplexJobsOnly && !printer.capabilities.simplexJobsOnly ? 'selected' : ''}>Allow both simplex and duplex jobs</option>
+                    <option value="duplexOnly" ${printer.capabilities.duplexJobsOnly ? 'selected' : ''}>Only accept duplex jobs</option>
+                    <option value="simplexOnly" ${printer.capabilities.simplexJobsOnly ? 'selected' : ''}>Only accept simplex jobs</option>
+                </select>
+            `;
+            jobRules.appendChild(duplexRule);
+        } else {
+            // For simplex-only printers, add a fixed message
+            const simplexMessage = document.createElement('div');
+            simplexMessage.className = 'job-rule';
+            simplexMessage.innerHTML = `
+                <span class="rule-label"><i class="fas fa-copy"></i> Duplex Jobs:</span>
+                <span style="flex: 1; padding: 8px; color: #666;">This printer only supports simplex jobs</span>
+            `;
+            jobRules.appendChild(simplexMessage);
+        }
+        
+        // Paper sizes section
+        const paperSizes = document.createElement('div');
+        paperSizes.className = 'capability-section';
+        paperSizes.innerHTML = `<h4>Supported Paper Sizes</h4>`;
+        
+        const paperSizesGrid = document.createElement('div');
+        paperSizesGrid.className = 'paper-size-options';
+        
+        // Get the available paper sizes from the fixed paper sizes array
+        const availablePaperSizes = ['A4', 'A3', 'Letter', 'Legal'];
+        
+        // Get the physically supported paper sizes
+        const physicalPaperSizes = printer.capabilities.paperSizes;
+        
+        availablePaperSizes.forEach(size => {
+            const isPhysicallySupported = physicalPaperSizes.includes(size);
+            const isCurrentlyEnabled = printer.capabilities.paperSizes.includes(size);
+            
+            const paperSizeCheckbox = document.createElement('label');
+            paperSizeCheckbox.className = `paper-size-checkbox ${!isPhysicallySupported ? 'disabled' : ''}`;
+            
+            paperSizeCheckbox.innerHTML = `
+                <input type="checkbox" 
+                    id="paper-${printer.name}-${size}"
+                    ${isCurrentlyEnabled ? 'checked' : ''} 
+                    ${!isPhysicallySupported ? 'disabled' : ''}
+                    data-printer="${printer.name}" 
+                    data-paper-size="${size}">
+                ${size}
+            `;
+            
+            paperSizesGrid.appendChild(paperSizeCheckbox);
+        });
+        
+        paperSizes.appendChild(paperSizesGrid);
+        paperSizes.innerHTML += `
+            <p class="capability-description">
+                You can disable paper sizes that are physically supported, but cannot enable unsupported sizes.
+            </p>
+        `;
+        cardContent.appendChild(paperSizes);
+        
+        // Add job rules section after paper sizes
+        cardContent.appendChild(jobRules);
+        
+        printerCard.appendChild(cardContent);
+        capabilitiesContainer.innerHTML = '';
+        capabilitiesContainer.appendChild(printerCard);
+        
+        // Set up the save button to save just this printer's capabilities
+        saveBtn.onclick = () => saveSelectedPrinterCapabilities(printerName);
+        
+        // Add event listeners for capability controls
+        setupCapabilityEventListenersForPrinter(printerName);
+    }).catch(err => {
+        console.error('Error loading printer capabilities:', err);
+        capabilitiesContainer.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading printer capabilities: ${err.message}</p>
+                <button id="retryCapabilitiesBtn" class="btn btn-secondary mt-20">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('retryCapabilitiesBtn')?.addEventListener('click', () => loadPrinterCapabilityDetails(printerName));
+    });
+}
+
+// Set up event listeners for capability toggles and dropdowns for a specific printer
+function setupCapabilityEventListenersForPrinter(printerName) {
+    // Paper size checkboxes for this printer
+    document.querySelectorAll(`.paper-size-checkbox:not(.disabled) input[type="checkbox"][data-printer="${printerName}"]`).forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            console.log(`Changing support for ${this.dataset.paperSize} on ${this.dataset.printer} to ${this.checked}`);
+        });
+    });
+    
+    // Job rule selects for this printer
+    document.querySelectorAll(`.rule-select[data-printer="${printerName}"]`).forEach(select => {
+        select.addEventListener('change', function() {
+            console.log(`Changing ${this.dataset.rule} for ${this.dataset.printer} to ${this.value}`);
+        });
+    });
+}
+
+// Function to save capabilities for only the selected printer
+function saveSelectedPrinterCapabilities(printerName) {
+    // Show loading state on save button
+    const saveButton = document.getElementById('saveCapabilitiesBtn');
+    if (saveButton) {
+        const originalText = saveButton.innerHTML;
+        saveButton.disabled = true;
+        saveButton.innerHTML = '<span class="refresh-spinner"></span> Saving...';
+        
+        // Reset button after 2 seconds regardless of result
+        setTimeout(() => {
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalText;
+        }, 2000);
+    }
+    
+    const capabilityChanges = {};
+    capabilityChanges[printerName] = {
+        capabilities: {},
+        paperSizes: []
+    };
+    
+    // Process job rules for this printer
+    document.querySelectorAll(`.rule-select[data-printer="${printerName}"]`).forEach(select => {
+        const rule = select.dataset.rule;
+        const value = select.value;
+        
+        if (rule === 'colorJobs') {
+            capabilityChanges[printerName].capabilities.colorJobsOnly = (value === 'colorOnly');
+            capabilityChanges[printerName].capabilities.monochromeJobsOnly = (value === 'monoOnly');
+        } else if (rule === 'duplexJobs') {
+            capabilityChanges[printerName].capabilities.duplexJobsOnly = (value === 'duplexOnly');
+            capabilityChanges[printerName].capabilities.simplexJobsOnly = (value === 'simplexOnly');
+        }
+    });
+    
+    // Process paper sizes for this printer
+    const paperSizes = new Set();
+    document.querySelectorAll(`.paper-size-checkbox:not(.disabled) input[type="checkbox"][data-printer="${printerName}"]`).forEach(checkbox => {
+        if (checkbox.checked) {
+            paperSizes.add(checkbox.dataset.paperSize);
+        }
+    });
+    
+    capabilityChanges[printerName].paperSizes = Array.from(paperSizes);
+    
+    console.log('Saving capability changes for printer:', printerName, capabilityChanges);
+    
+    // Send changes to main process
+    ipcRenderer.invoke('update-printer-capabilities', capabilityChanges)
+        .then((result) => {
+            if (result.success) {
+                showNotification(`Printer ${printerName} capabilities updated successfully`, 'success');
+            } else {
+                showNotification(`Error: ${result.error}`, 'error');
+            }
+        })
+        .catch(err => {
+            showNotification(`Error saving printer capabilities: ${err.message}`, 'error');
+        });
+}
+
+// Update the existing saveCapabilitiesChanges function to delegate to the new function
+function saveCapabilitiesChanges() {
+    // This function is kept for compatibility but now only calls saveSelectedPrinterCapabilities
+    // with the currently visible printer, if any.
+    const printerCard = document.querySelector('.printer-capability-card');
+    if (printerCard) {
+        const printerName = printerCard.querySelector('.printer-capability-header span').textContent;
+        saveSelectedPrinterCapabilities(printerName);
+    } else {
+        showNotification('No printer selected', 'error');
     }
 }
 
-// Helper function to switch to KYC Status tab
-function switchToKycStatusTab() {
-    // First make sure settings view is active
-    switchView('settings');
-    
-    // Activate the KYC button in the top nav
-    document.querySelectorAll('.settings-nav-button').forEach(btn => btn.classList.remove('active'));
-    const kycButton = document.querySelector('.settings-nav-button[data-section="kyc"]');
-    if (kycButton) kycButton.classList.add('active');
-    
-    // Show the KYC section
-    document.querySelectorAll('.settings-section').forEach(section => section.classList.remove('active'));
-    const kycSection = document.getElementById('kycSection');
-    if (kycSection) kycSection.classList.add('active');
-    
-    // Activate the KYC Status tab
-    const kycSectionButtons = kycSection.querySelectorAll('.settings-section-button');
-    kycSectionButtons.forEach(btn => btn.classList.remove('active'));
-    const kycStatusButton = kycSection.querySelector('.settings-section-button[data-tab="kycStatusTab"]');
-    if (kycStatusButton) kycStatusButton.classList.add('active');
-    
-    // Show the KYC Status content
-    kycSection.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
-    document.getElementById('kycStatusTab').classList.add('active');
-}
+// Update settings tabs to load capabilities when the tab is shown
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener for the capabilities tab
+    document.querySelectorAll('.settings-section-button').forEach(button => {
+        button.addEventListener('click', () => {
+            if (button.dataset.tab === 'printersCapabilitiesTab') {
+                // Load printer capabilities selector when tab is selected
+                loadPrinterCapabilities();
+            }
+        });
+    });
 
-// Close any open KYC modal when clicking outside of it
-document.addEventListener('click', (e) => {
-    const kycModal = document.getElementById('kycOverlayModal');
-    const kycContent = document.querySelector('.kyc-modal-content');
-    
-    if (kycModal && !kycModal.classList.contains('hidden') && 
-        e.target === kycModal && !kycContent.contains(e.target)) {
-        kycModal.classList.add('hidden');
-        document.body.style.overflow = ''; // Restore scrolling
+    // Add event listener for the refresh button
+    const refreshButton = document.getElementById('refreshCapabilitiesBtn');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', loadPrinterCapabilities);
     }
-})
+});
 
 async function fetchAndDisplayPrinters() {
     try {
@@ -1195,13 +1565,27 @@ function showNotification(message, type) {
         default: iconClass = 'fas fa-bell';
     }
 
-    notification.innerHTML = `<i class="${iconClass}"></i><span>${message}</span>`;
+    notification.innerHTML = `
+    <i class="${iconClass}"></i>
+    <span>${message}</span>
+    ${type === 'error' ? '<button class="notification-close">&times;</button>' : ''}
+    `;
+    if (type === 'error') {
+        notification.querySelector('.notification-close').addEventListener('click', () => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        });
+    }
+
     notificationContainer.appendChild(notification);
 
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => notification.remove(), 500);
-    }, 3000);
+    // Auto-remove non-error notifications
+    if (type !== 'error') {
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        }, 3000);
+    }
 }
 
 ipcRenderer.on('update-available', () => {
@@ -1249,7 +1633,6 @@ ipcRenderer.on('print-failed', (_event, jobId) => {
 
 ipcRenderer.on('metrics-updated', (_event, updatedMetrics) => {
     metrics = updatedMetrics;
-    // renderMetrics();
 });
 
 ipcRenderer.on('job-history-updated', () => {
@@ -1273,43 +1656,53 @@ ipcRenderer.on('log-message', (_event, message) => {
     console.log(message);
 });
 
+// Update auth-success event listener to remove loading indicator
 ipcRenderer.on('auth-success', (_event, user) => {
-    console.log('Auth success received:', user);
-    currentUser = user;
-
-    // Special handling for test user
-    if (user.isTestUser) {
-        console.log('Test user login detected');
-    }
-
-    // Make sure to reset any login form UIs
-    const testLoginButton = document.getElementById('testLoginBtn');
-    if (testLoginButton && testLoginButton.classList.contains('loading')) {
-        testLoginButton.classList.remove('loading');
-    }
-
-    console.log('About to show dashboard');
-    showDashboard();
-    console.log('Dashboard should be visible now');
-
-    showNotification(`Welcome, ${user.email || 'Test User'}!`, 'success');
-
-    // Update user information in the dashboard
-    const userNameEl = document.querySelector('.user-name');
-    const userEmailEl = document.querySelector('.user-email');
-
-    if (userNameEl) userNameEl.textContent = user.email ? user.email.split('@')[0] : 'Test User';
-    if (userEmailEl) userEmailEl.textContent = user.email || 'test@ctrlp.com';
-});
-
-ipcRenderer.on('auth-error', (_event, message) => {
-    // Reset loading states on error
-    const testLoginButton = document.getElementById('testLoginBtn');
-    if (testLoginButton && testLoginButton.classList.contains('loading')) {
-        testLoginButton.classList.remove('loading');
+    // Remove loading indicator
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
     }
     
-    showNotification(`Authentication failed: ${message}`, 'error');
+    // Store the current user
+    currentUser = user;
+    
+    // Show dashboard and other UI elements
+    showDashboard();
+    
+    // Show notifications based on account status
+    if (user.kyc_verified) {
+        showNotification('Welcome back!', 'success');
+    } else {
+        displayKycReminder();
+    }
+});
+
+// Update auth-error event listener to properly handle failed logins
+ipcRenderer.on('auth-error', (_event, message) => {
+    // Remove loading indicator
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+    
+    // Remove loading state from button
+    const loginButton = document.getElementById('loginBtn');
+    if (loginButton) loginButton.classList.remove('loading');
+    
+    showNotification(`Authentication error: ${message}`, 'error');
+    
+    // Make sure we stay on the login page
+    showAuthView();
+});
+
+// Also add a handler for session-check-complete event
+ipcRenderer.on('session-check-complete', () => {
+    // Remove loading indicator
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
 });
 
 ipcRenderer.on('sign-out-success', () => {
@@ -1319,6 +1712,7 @@ ipcRenderer.on('sign-out-success', () => {
 });
 
 function displayKycReminder() {
+    logKyc('Displaying KYC reminder banner');
     const kycReminder = document.createElement('div');
     kycReminder.id = 'kycReminder';
     kycReminder.className = 'kyc-reminder';
@@ -1479,20 +1873,20 @@ document.querySelectorAll('.kyc-upload .file-input').forEach(fileInput => {
         const upload = event.target.closest('.kyc-upload');
         const file = event.target.files[0];
         const documentType = upload.getAttribute('data-type');
+        logKyc(`File input changed for document type: ${documentType}`, { fileName: file?.name, size: file?.size });
+
         const previewContainer = document.getElementById(`${documentType}Preview`);
 
         if (!file) {
-            console.error(`No file selected for ${documentType}`);
+            logKyc(`No file selected for ${documentType}`);
             return;
         }
-
-        console.log(`Selected file: ${file.name}, size: ${file.size} bytes`);
 
         try {
             // Save the file path to the dataset for later use
             const filePath = await saveFileToTemp(file);
             upload.dataset.filePath = filePath;
-            console.log(`File path saved for ${documentType}: ${filePath}`); // Debug log
+            logKyc(`File path saved for ${documentType}: ${filePath}`);
 
             // Create document preview
             const documentPreview = document.createElement('div');
@@ -1506,7 +1900,7 @@ document.querySelectorAll('.kyc-upload .file-input').forEach(fileInput => {
             // Add remove functionality
             documentPreview.querySelector('.document-remove').addEventListener('click', (e) => {
                 e.stopPropagation();
-                console.log(`Removing file: ${file.name} for document type: ${documentType}`);
+                logKyc(`Removing file: ${file.name} for document type: ${documentType}`);
                 documentPreview.remove();
                 fileInput.value = '';
                 upload.classList.remove('hidden'); // Show the upload box again
@@ -1519,9 +1913,9 @@ document.querySelectorAll('.kyc-upload .file-input').forEach(fileInput => {
 
             // Hide the upload box
             upload.classList.add('hidden');
-            console.log(`File successfully attached for document type: ${documentType}`);
+            logKyc(`File successfully attached for document type: ${documentType}`);
         } catch (error) {
-            console.error(`Error saving file for ${documentType}:`, error);
+            logKyc(`Error saving file for ${documentType}: ${error}`);
         }
     });
 });
@@ -1538,3 +1932,122 @@ async function saveFileToTemp(file) {
 
 // Call this function initially to ensure the button state is correct
 updateKycButtonState();
+
+// Add this function to check session status manually
+async function checkSessionStatus() {
+  try {
+    const { hasSession, user } = await ipcRenderer.invoke('check-session-status');
+    
+    // Remove loading indicator
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+    
+    if (hasSession && user) {
+      // Session exists, process user login
+      currentUser = user;
+      showDashboard();
+    }
+  } catch (error) {
+    console.error('Failed to check session status:', error);
+    
+    // Remove loading indicator on error
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+  }
+}
+
+// Call this function in case the automatic check doesn't complete
+setTimeout(checkSessionStatus, 3000);
+
+// Add this function to handle KYC overlay form submission
+async function submitKycFormFromOverlay() {
+    logKyc('submitKycFormFromOverlay called');
+    try {
+        // Collect KYC data from overlay modal fields
+        const getValue = (id) => document.getElementById(id)?.value?.trim() || "";
+        const getFilePath = (type) => {
+            const upload = document.querySelector(`.kyc-upload[data-type="${type}"]`);
+            return upload?.dataset?.filePath || "";
+        };
+
+        // Map your overlay modal's input IDs and data-types to backend fields
+        const kycData = {
+            address: getValue('kycAddress'),
+            state: getValue('kycState'),
+            account_holder_name: getValue('kycAccountHolderName'),
+            account_number: getValue('kycAccountNumber'),
+            ifsc_code: getValue('kycIfsc'),
+            bank_name: getValue('kycBankName'),
+            branch_name: getValue('kycBranchName'),
+            aadhaar: getFilePath('aadhaar-front'),
+            pan_card_path: getFilePath('pan-card'),
+            bank_proof_path: getFilePath('bank-proof'),
+            passport_photo_path: getFilePath('passport-photo'),
+        };
+        logKyc('Collected KYC data', kycData);
+
+        // Validate required fields before sending
+        const requiredFields = [
+            'address', 'aadhaar', 'pan_card_path', 'bank_proof_path', 'passport_photo_path'
+        ];
+        for (const field of requiredFields) {
+            if (!kycData[field]) {
+                logKyc(`Missing required field: ${field}`);
+                showNotification(`Missing required field: ${field.replace(/_/g, ' ')}`, 'error');
+                return;
+            }
+        }
+
+        // Show loading state on button
+        const submitBtn = document.getElementById('submitKycOverlayBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="refresh-spinner"></span> Submitting...';
+        }
+
+        // Send data to main process
+        logKyc('Sending KYC data to main process');
+        const result = await ipcRenderer.invoke('submit-kyc-data', kycData);
+
+        // Restore button state
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Submit KYC';
+        }
+
+        if (result.success) {
+            logKyc('KYC submitted successfully');
+            showNotification('KYC submitted successfully!', 'success');
+            document.getElementById('kycOverlayModal').classList.add('hidden');
+            document.body.style.overflow = '';
+            // Optionally refresh shop info or UI
+            ipcRenderer.send('fetch-shop-info');
+        } else {
+            logKyc(`KYC submission failed: ${result.error}`);
+            showNotification(`KYC submission failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        logKyc(`KYC error: ${error.message}`);
+        showNotification(`KYC error: ${error.message}`, 'error');
+        const submitBtn = document.getElementById('submitKycOverlayBtn');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Submit KYC';
+        }
+    }
+}
+
+// Add a helper for logging to both console and terminal
+function logKyc(message, data) {
+    const msg = `[KYC] ${message}` + (data ? ` | ${JSON.stringify(data)}` : '');
+    console.log(msg);
+    try {
+        ipcRenderer.send('log-message', msg);
+    } catch (e) {
+        // Ignore if ipcRenderer not available
+    }
+}

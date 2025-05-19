@@ -1,25 +1,35 @@
 {
-  "name": "ctrlp-ui-plus-backend",
-  "version": "1.0.0",
+  "name": "ctrlp-dashboard",
+  "version": "0.9.0",
   "description": "CtrlP UI+ Backend and Dashboard",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "test": "jest"
+    "test": "jest",
+    "publish": "electron-builder --publish always"
+
   },
   "author": "CtrlP Team",
   "license": "ISC",
   "build": {
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://updates.ctrlp.co.in"
+        "provider": "github",
+        "owner": "kurama07a",
+        "repo": "ctrlp-dashboard",
+        "releaseType": "release"
       }
     ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    
+    
     "appId": "com.ctrlp.uiplus",
-    "productName": "CtrlP UI+",
+    "productName": "CtrlP",
     "files": [
       "dist/**/*",
       "node_modules/**/*",
@@ -31,7 +41,8 @@
       "icon.jpg",
       "blue.png",
       "white.png",
-      "styles.css"
+      "styles.css",
+      "sessionManager.js"
     ],
     "mac": {
       "category": "public.app-category.utilities"
@@ -49,6 +60,7 @@
     "chart.js": "^4.2.1",
     "date-fns": "^2.29.3",
     "electron-is-dev": "^2.0.0",
+    "electron-store": "^8.1.0",
     "electron-updater": "^6.6.2",
     "pdf-lib": "^1.17.1",
     "pdf-to-printer": "^5.6.0",

@@ -819,7 +819,6 @@ input:checked+.slider:before {
 .job-item.in-progress {
     border-left: 3px solid var(--primary);
 }
-
 .discarded-printers {
     background-color: var(--card-background);
     padding: 15px;
@@ -830,10 +829,284 @@ input:checked+.slider:before {
     flex-direction: row;
     flex-wrap: nowrap;
     gap: 10px;
-    overflow-x: hidden;
+    overflow-x: auto;
     white-space: nowrap;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-light) transparent;
 }
 
+/* Webkit browsers (Chrome, Safari, Edge) */
+.discarded-printers::-webkit-scrollbar {
+    height: 6px;
+}
+
+.discarded-printers::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+}
+
+.discarded-printers::-webkit-scrollbar-thumb {
+    background: var(--primary-light);
+    border-radius: 10px;
+    transition: background 0.3s;
+}
+
+.discarded-printers::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+/* Printer Capabilities styles */
+.printer-capability-card {
+    background-color: var(--card-background);
+    border-radius: 10px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.printer-capability-header {
+    background-color: var(--primary);
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.printer-capability-content {
+    padding: 15px;
+}
+
+.printer-capability-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.capability-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--background-color);
+    padding: 12px 15px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.capability-toggle:hover {
+    background-color: rgba(0, 102, 204, 0.1);
+}
+
+.capability-toggle label {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.capability-toggle .toggle-switch {
+    margin: 0;
+    width: 50px;
+    height: 26px;
+}
+
+.capability-toggle .toggle-switch .slider {
+    border-radius: 24px;
+}
+
+.capability-toggle .toggle-switch .slider:before {
+    height: 18px;
+    width: 18px;
+    left: 4px;
+    bottom: 4px;
+}
+
+.capability-toggle .toggle-switch input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+.paper-size-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.paper-size-checkbox {
+    display: flex;
+    align-items: center;
+    background-color: var(--background-color);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.paper-size-checkbox:hover {
+    background-color: rgba(0, 102, 204, 0.1);
+}
+
+.paper-size-checkbox input[type="checkbox"] {
+    margin-right: 6px;
+    width: auto;
+}
+
+.capability-section {
+    margin-bottom: 15px;
+}
+
+.capability-section h4 {
+    margin-bottom: 10px;
+    color: var(--primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.job-rules-container {
+    margin-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding-top: 15px;
+}
+
+.dark-mode .job-rules-container {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.job-rule {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    background-color: var(--background-color);
+    padding: 10px 15px;
+    border-radius: 6px;
+}
+
+.rule-label {
+    font-weight: 500;
+    margin-right: 10px;
+}
+
+.rule-select {
+    flex: 1;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background-color: var(--card-background);
+}
+
+.dark-mode .rule-select {
+    border-color: #444;
+    background-color: #333;
+    color: var(--text-light);
+}
+
+.no-printers-message {
+    padding: 40px 20px;
+    text-align: center;
+    border: 2px dashed rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    color: #666;
+}
+
+.dark-mode .no-printers-message {
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #aaa;
+}
+
+.capability-description {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+.dark-mode .capability-description {
+    color: #aaa;
+}
+/* Additional CSS for printer capabilities */
+.settings-header-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 15px;
+}
+
+.capability-toggle.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.capability-toggle.disabled:hover {
+    background-color: var(--background-color);
+}
+
+.capability-toggle.disabled label,
+.capability-toggle.disabled .toggle-switch {
+    cursor: not-allowed;
+}
+
+.capability-description.warning {
+    color: #e67e22;
+}
+
+.refresh-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary);
+    animation: spin 1s infinite linear;
+    margin-right: 8px;
+}
+
+.dark-mode .refresh-spinner {
+    border-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--primary);
+}
+
+.feature-flag {
+    font-size: 11px;
+    background-color: rgba(0, 102, 204, 0.1);
+    color: var(--primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.auth-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.auth-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.dark-mode .feature-flag {
+    background-color: rgba(0, 102, 204, 0.2);
+}
 .discarded-printers-title {
     width: auto;
     margin-bottom: 10px;
@@ -2278,4 +2551,185 @@ canvas {
 .earnings-table tr:hover {
     background-color: var(--secondary-color);
     color: white;
+}
+
+/* Printer Selector Styles */
+.printer-selector {
+    background-color: var(--card-background);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+}
+
+.dark-mode .printer-selector {
+    background-color: var(--dark-bg);
+}
+
+.printer-selector-header {
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding-bottom: 12px;
+}
+
+.dark-mode .printer-selector-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.printer-selector-header h3 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.printer-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.printer-selector-item {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+}
+
+.dark-mode .printer-selector-item {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.printer-selector-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-color: var(--primary-light);
+}
+
+.dark-mode .printer-selector-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.printer-selector-item h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.printer-selector-item-subtitle {
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.dark-mode .printer-selector-item-subtitle {
+    color: #aaa;
+}
+
+.printer-selector-item-badges {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+}
+
+.printer-badge {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: #333;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+}
+
+.dark-mode .printer-badge {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #eee;
+}
+
+.printer-badge i {
+    margin-right: 4px;
+    font-size: 11px;
+}
+
+.printer-badge.color {
+    background-color: rgba(108, 92, 231, 0.15);
+    color: #6c5ce7;
+}
+
+.dark-mode .printer-badge.color {
+    background-color: rgba(108, 92, 231, 0.3);
+    color: #a29bfe;
+}
+
+.printer-badge.duplex {
+    background-color: rgba(0, 184, 148, 0.15);
+    color: #00b894;
+}
+
+.dark-mode .printer-badge.duplex {
+    background-color: rgba(0, 184, 148, 0.3);
+    color: #55efc4;
+}
+
+.printer-badge.monochrome {
+    background-color: rgba(45, 52, 54, 0.15);
+    color: #2d3436;
+}
+
+.dark-mode .printer-badge.monochrome {
+    background-color: rgba(178, 190, 195, 0.3);
+    color: #dfe6e9;
+}
+
+.printer-badge.discarded {
+    background-color: rgba(214, 48, 49, 0.15);
+    color: #d63031;
+}
+
+.dark-mode .printer-badge.discarded {
+    background-color: rgba(214, 48, 49, 0.3);
+    color: #ff7675;
+}
+
+.printer-selector-loading {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    color: #666;
+    gap: 12px;
+}
+
+.dark-mode .printer-selector-loading {
+    color: #aaa;
+}
+
+.printer-capabilities-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode .printer-capabilities-container {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.printer-capabilities-container.hidden {
+    display: none;
+}
+
+.back-to-printers {
+    margin-top: 20px;
+}
+
+/* Add a class for the save capabilities button to handle visibility */
+#saveCapabilitiesBtn.hidden, #backToPrinterListBtn.hidden {
+    display: none;
 }

@@ -1,0 +1,82 @@
+{
+  "paperLevels": {
+    "OneNote (Desktop)": {
+      "Letter": 0,
+      "Legal": 0,
+      "A3": 0,
+      "A4": 100
+    },
+    "Microsoft Print to PDF": {
+      "Letter": 0,
+      "Legal": 0,
+      "A3": 0,
+      "A4": 113
+    },
+    "HP Smart Tank 660-670 series": {
+      "Letter": 0,
+      "Legal": 0,
+      "A4": 1380
+    },
+    "NPID5E410 (HP LaserJet Tank MFP 2606sdw)": {
+      "Letter": 0,
+      "A4": 0
+    },
+    "ECE_Dept_Printer_1 (HP LaserJet MFP M233dw)": {
+      "Letter": 0,
+      "A4": 0
+    }
+  },
+  "discardedPrinters": [
+    "OneNote (Desktop)",
+    "HP Smart Tank 660-670 series",
+    "NPID5E410 (HP LaserJet Tank MFP 2606sdw)",
+    "ECE_Dept_Printer_1 (HP LaserJet MFP M233dw)"
+  ],
+  "capabilities": {
+    "OneNote (Desktop)": {
+      "color": true,
+      "duplex": false,
+      "paperSizes": {},
+      "maxCopies": 999,
+      "supportedResolutions": [
+        "600dpi"
+      ]
+    },
+    "Microsoft Print to PDF": {
+      "color": true,
+      "duplex": false,
+      "paperSizes": {},
+      "maxCopies": 999,
+      "supportedResolutions": [
+        "600dpi"
+      ]
+    },
+    "HP Smart Tank 660-670 series": {
+      "color": true,
+      "duplex": true,
+      "paperSizes": {},
+      "maxCopies": 999,
+      "supportedResolutions": [
+        "600dpi"
+      ]
+    },
+    "NPID5E410 (HP LaserJet Tank MFP 2606sdw)": {
+      "color": true,
+      "duplex": false,
+      "paperSizes": {},
+      "maxCopies": 999,
+      "supportedResolutions": [
+        "600dpi"
+      ]
+    },
+    "ECE_Dept_Printer_1 (HP LaserJet MFP M233dw)": {
+      "color": false,
+      "duplex": false,
+      "paperSizes": {},
+      "maxCopies": 999,
+      "supportedResolutions": [
+        "300dpi"
+      ]
+    }
+  }
+}

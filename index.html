@@ -462,6 +462,7 @@
                         <!-- Printers section -->
                         <div class="settings-section" id="printersSection">
                             <div class="settings-section-nav">
+                                <button class="settings-section-button" data-tab="printersCapabilitiesTab">Capabilities</button>
                                 <button class="settings-section-button active" data-tab="printersManageTab">Manage Printers</button>
                                 <button class="settings-section-button" data-tab="printersDefaultsTab">Default Settings</button>
                             </div>
@@ -507,6 +508,46 @@
                                     </div>
                                     <button type="button" class="btn btn-primary">Save Defaults</button>
                                 </form>
+                            </div>
+                            <!-- Add after printersDefaultsTab in settings-container -->
+                            <!-- Updated printersCapabilitiesTab content -->
+                            <div class="settings-tab" id="printersCapabilitiesTab">
+                                <h2>Printer Capabilities</h2>
+                                <div class="settings-header-actions">
+                                    <button id="refreshCapabilitiesBtn" class="btn btn-secondary">
+                                        <i class="fas fa-sync-alt"></i> Refresh
+                                    </button>
+                                </div>
+                                <p class="settings-info">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Customize which types of print jobs each printer can handle. You can restrict capabilities but cannot exceed a printer's physical limits.
+                                </p>
+                                
+                                <!-- Add printer selection UI -->
+                                <div id="printerSelector" class="printer-selector">
+                                    <div class="printer-selector-header">
+                                        <h3>Select a printer to configure</h3>
+                                    </div>
+                                    <div id="printerList" class="printer-list">
+                                        <!-- Printers will be populated here -->
+                                        <div class="printer-selector-loading">
+                                            <div class="loading-spinner"></div>
+                                            Loading printers...
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="printerCapabilitiesContainer" class="printer-capabilities-container hidden">
+                                    <div class="loading-spinner">Loading printer information...</div>
+                                </div>
+                                
+                                <button type="button" id="saveCapabilitiesBtn" class="btn btn-primary mt-20 hidden">
+                                    <i class="fas fa-save"></i> Save Capabilities
+                                </button>
+
+                                <button type="button" id="backToPrinterListBtn" class="btn btn-secondary mt-20 hidden">
+                                    <i class="fas fa-arrow-left"></i> Back to Printer List
+                                </button>
                             </div>
                         </div>
                         
@@ -938,12 +979,18 @@
 
         loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
             loginButton.classList.add('loading');
-            setTimeout(() => {
-                loginButton.classList.remove('loading');
-                document.getElementById('authView').classList.add('hidden');
-                document.getElementById('dashboardView').classList.remove('hidden');
-            }, 1500);
+            
+            // Instead of automatically showing dashboard, call the login function
+            if (window.electronAPI && window.electronAPI.login) {
+                window.electronAPI.login(email, password);
+            } else {
+                // Fallback for direct renderer access
+                const { ipcRenderer } = require('electron');
+                ipcRenderer.send('login', { email, password });
+            }
         });
 
         signupForm.addEventListener('submit', function(e) {
