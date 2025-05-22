@@ -50,10 +50,23 @@ class SessionManager {
   }
 
   // Save user session
+// sessionManager.js
+
   saveSession(user) {
     try {
       const encrypted = this.encrypt(user);
-      fs.writeFileSync(this.sessionFile, JSON.stringify(encrypted));
+      const dirPath = path.dirname(this.sessionFile);
+      
+      // Ensure directory exists
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+      
+      // Write with proper permissions
+      fs.writeFileSync(this.sessionFile, JSON.stringify(encrypted), {
+        mode: 0o600 // Only owner can read/write
+      });
+      
       return true;
     } catch (error) {
       console.error(`Error saving session: ${error.message}`);
@@ -62,6 +75,8 @@ class SessionManager {
   }
 
   // Load user session
+// sessionManager.js
+
   loadSession() {
     try {
       if (!fs.existsSync(this.sessionFile)) {
@@ -82,13 +97,21 @@ class SessionManager {
         return null;
       }
       
-      return this.decrypt(encrypted);
+      const decrypted = this.decrypt(encrypted);
+      if (!decrypted || !decrypted.email) {
+        console.error('Invalid session data');
+        this.clearSession();
+        return null;
+      }
+      
+      return decrypted;
     } catch (error) {
       console.error(`Error loading session: ${error.message}`);
       this.clearSession();
       return null;
     }
   }
+
 
   // Clear user session
   clearSession() {

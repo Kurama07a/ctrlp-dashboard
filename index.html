@@ -154,10 +154,10 @@
                 </div>
                 <div class="user-dropdown">
                     <div class="user-info">
-                        <img src="https://via.placeholder.com/40" alt="User Avatar" class="user-avatar">
+                        <img src="printer.png" alt="User Avatar" class="user-avatar">
                         <div>
-                            <div class="user-name">User Name</div>
-                            <div class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="eadfd9cfd8eacfd2cbc7dac6cf84c9c5c7">[email&#160;protected]</a></div>
+                            <div class="user-name" id="user-name">User Name</div>
+                            <div class="user-email" id="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="eadfd9cfd8eacfd2cbc7dac6cf84c9c5c7">[email&#160;protected]</a></div>
                         </div>
                     </div>
                 </div>
@@ -201,8 +201,14 @@
             </header>
 
             <div id="printerView">
+                <div class="metrics-header" style="flex-direction: row;">
+                <h3>Daily Metrics</h3>
+                <button id="toggleMetrics" class="toggle-metrics-btn" title="Toggle metrics visibility">
+                <i class="fas fa-eye"></i>
+                </button>
+                </div>
                 <!-- Replace metrics section with daily metrics -->
-                <section class="metrics">
+                <section id="metricsSection" class="metrics">
                     <div class="metric-card">
                         <div class="metric-title">Today's Total Pages</div>
                         <div id="dailyTotalPages" class="metric-value">0</div>
@@ -351,6 +357,10 @@
                     <button class="settings-nav-button" data-section="notifications">
                         <i class="fas fa-bell"></i>
                         Notifications
+                    </button>
+                    <button class="settings-nav-button" data-section="help">
+                        <i class="fas fa-question-circle"></i>
+                        Help & Support
                     </button>
                 </div>
                 
@@ -550,7 +560,88 @@
                                 </button>
                             </div>
                         </div>
-                        
+                         <!-- Add this inside the settings-content div in index.html -->
+<div class="settings-section" id="helpSection">
+    <div class="settings-section-nav">
+        <button class="settings-section-button active" data-tab="helpGuideTab">User Guide</button>
+        <button class="settings-section-button" data-tab="helpSupportTab">Get Support</button>
+    </div>
+    
+    <div class="settings-tab active" id="helpGuideTab">
+        <h2>User Guide</h2>
+        
+        <div class="help-guide-container">
+            <section class="help-topic">
+                <h3><i class="fas fa-print"></i> Managing Printers</h3>
+                <div class="help-content">
+                    <h4>How to Discard a Printer</h4>
+                    <ol>
+                        <li>Go to the Dashboard view</li>
+                        <li>Locate the printer you want to discard</li>
+                        <li>Click the "Discard" button <i class="fas fa-trash"></i> in the top-right corner of the printer card</li>
+                        <li>The printer will be moved to the "Discarded Printers" section</li>
+                    </ol>
+                    <p class="help-note">Note: You can restore discarded printers at any time from the "Discarded Printers" section.</p>
+
+                    <h4>Adding Paper to Printers</h4>
+                    <ol>
+                        <li>Find the printer you want to add paper to</li>
+                        <li>Locate the paper size section (e.g., A4, A3)</li>
+                        <li>Click either "+100" or "+500" to add that amount of pages</li>
+                    </ol>
+                    <p class="help-note">Tip: Keep track of paper levels to ensure uninterrupted printing.</p>
+                </div>
+            </section>
+
+            <section class="help-topic">
+                <h3><i class="fas fa-tasks"></i> Print Jobs</h3>
+                <div class="help-content">
+                    <h4>Monitoring Print Jobs</h4>
+                    <ul>
+                        <li>Active jobs appear in the printer's job queue</li>
+                        <li>View job history in the Transactions tab</li>
+                        <li>Check job statistics in the Statistics tab</li>
+                    </ul>
+
+                    <h4>Job Status Indicators</h4>
+                    <div class="status-indicators">
+                        <div><span class="status-dot pending"></span> Pending - Job is waiting to be processed</div>
+                        <div><span class="status-dot printing"></span> Printing - Job is currently printing</div>
+                        <div><span class="status-dot completed"></span> Completed - Job finished successfully</div>
+                        <div><span class="status-dot failed"></span> Failed - Job encountered an error</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="help-topic">
+                <h3><i class="fas fa-chart-line"></i> Statistics & Reports</h3>
+                <div class="help-content">
+                    <ul>
+                        <li>View daily metrics on the dashboard</li>
+                        <li>Access detailed statistics in the Statistics tab</li>
+                        <li>Track earnings and performance over time</li>
+                        <li>Monitor printer usage and efficiency</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="settings-tab" id="helpSupportTab">
+        <h2>Need Help?</h2>
+        <div class="support-container">
+            <div class="support-message">
+                <p>Having issues with the application? Our support team is here to help!</p>
+                <div class="message-box">
+                    <textarea id="supportMessage" placeholder="Describe your issue here..." rows="4"></textarea>
+                    <button id="sendSupportMessage" class="btn btn-primary">
+                        <i class="fab fa-whatsapp"></i> Contact Support via WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                         <!-- KYC section -->
                         <div class="settings-section" id="kycSection">
                             <div class="settings-section-nav">
@@ -656,6 +747,7 @@
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>

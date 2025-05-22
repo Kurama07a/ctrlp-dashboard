@@ -19,13 +19,106 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAuthUI();
     setupAuthEventListeners();
     setupSettingsDropdown();
-    fetchShopInfo();
+    //fetchShopInfo();
     loadDailyMetrics();
+    setupSettingsNavigation();
+});
+// Add to renderer.js
+function setupSettingsNavigation() {
+    document.querySelectorAll('.settings-nav-button').forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active class from all buttons
+            document.querySelectorAll('.settings-nav-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            // Hide all sections
+            document.querySelectorAll('.settings-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Show selected section
+            const sectionId = button.getAttribute('data-section') + 'Section';
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.classList.add('active');
+                
+                // Handle tab navigation within the section
+                const firstTabButton = section.querySelector('.settings-section-button');
+                if (firstTabButton) {
+                    section.querySelectorAll('.settings-section-button').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    firstTabButton.classList.add('active');
+                    
+                    const firstTabId = firstTabButton.getAttribute('data-tab');
+                    section.querySelectorAll('.settings-tab').forEach(tab => {
+                        tab.classList.remove('active');
+                    });
+                    document.getElementById(firstTabId)?.classList.add('active');
+                }
+            }
+        });
+    });
+
+    // Handle tab navigation within sections
+    document.querySelectorAll('.settings-section-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const section = button.closest('.settings-section');
+            
+            // Remove active class from all buttons in this section
+            section.querySelectorAll('.settings-section-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            // Hide all tabs in this section
+            section.querySelectorAll('.settings-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const tabId = button.getAttribute('data-tab');
+            const tab = document.getElementById(tabId);
+            if (tab) tab.classList.add('active');
+        });
+    });
+}
+
+// Call this function when the page loads
+
+// Add to your renderer.js file
+document.getElementById('sendSupportMessage')?.addEventListener('click', () => {
+    const message = document.getElementById('supportMessage')?.value.trim();
+    if (!message) {
+        showNotification('Please enter a message before sending', 'warning');
+        return;
+    }
+
+    // Replace with your support phone number
+    const phoneNumber = '918299064687'; // Format: country code + phone number
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`;
+    
+    // Open in default browser
+    require('electron').shell.openExternal(whatsappUrl);
+    
+    // Clear the textarea
+    if (document.getElementById('supportMessage')) {
+        document.getElementById('supportMessage').value = '';
+    }
+    
+    showNotification('Opening WhatsApp...', 'success');
 });
 
 async function fetchShopInfo() {
     try {
-        const response = await ipcRenderer.invoke("fetch-shop-info");
+        //const response = await ipcRenderer.invoke("fetch-shop-info");
         if (response.success) {
             const shopInfo = response.data;
             document.getElementById("shopName").textContent = shopInfo.name;
@@ -41,7 +134,62 @@ async function fetchShopInfo() {
         console.error("Error fetching shop info:", error);
     }
 }
+// Add this function to renderer.js
+// Add this function to renderer.js
+function toggleMetricsVisibility() {
+    const metricsSection = document.getElementById('metricsSection');
+    const toggleBtn = document.getElementById('toggleMetrics');
+    const metricValues = metricsSection.querySelectorAll('.metric-value');
+    const icon = toggleBtn.querySelector('i');
+    
+    // Store the original values if not already stored
+    metricValues.forEach(value => {
+        if (!value.dataset.originalValue) {
+            value.dataset.originalValue = value.textContent;
+        }
+    });
+    
+    const isHidden = icon.classList.contains('fa-eye-slash');
+    
+    if (isHidden) {
+        // Show the values
+        metricValues.forEach(value => {
+            value.textContent = value.dataset.originalValue;
+        });
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    } else {
+        // Hide the values with asterisks
+        metricValues.forEach(value => {
+            value.textContent = '*'.repeat(value.dataset.originalValue.length);
+        });
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    }
+    
+    // Save preference
+    localStorage.setItem('metricsHidden', !isHidden);
+}
 
+// Update the existing event listener for the toggle button
+document.getElementById('toggleMetrics').addEventListener('click', toggleMetricsVisibility);
+
+// Update initializeMetricsVisibility to use the new toggle function
+function initializeMetricsVisibility() {
+    const isHidden = localStorage.getItem('metricsHidden') === 'true';
+    const toggleBtn = document.getElementById('toggleMetrics');
+    const icon = toggleBtn.querySelector('i');
+    
+    if (isHidden) {
+        const metricValues = document.querySelectorAll('.metric-value');
+        metricValues.forEach(value => {
+            value.dataset.originalValue = value.textContent;
+            value.textContent = '*'.repeat(value.textContent.length);
+        });
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    }
+}
 // Update the initializeAuthUI function to store a reference to the loading indicator
 function initializeAuthUI() {
     showAuthView();
@@ -225,7 +373,7 @@ function renderDailyMetrics() {
     document.getElementById("dailyTotalPages").textContent = todayMetrics.totalPages;
     document.getElementById("dailyMonochromeJobs").textContent = todayMetrics.monochromeJobs;
     document.getElementById("dailyColorJobs").textContent = todayMetrics.colorJobs;
-    document.getElementById("dailyTotalIncome").textContent = `₹${todayMetrics.totalIncome}`;
+    document.getElementById("dailyTotalIncome").textContent =`₹${Number(todayMetrics.totalIncome).toFixed(2)}`;
 }
 
 function renderEarningsTable() {
@@ -239,7 +387,7 @@ function renderEarningsTable() {
                 <td>${metrics.totalPages}</td>
                 <td>${metrics.monochromeJobs}</td>
                 <td>${metrics.colorJobs}</td>
-                <td>₹${metrics.totalIncome}</td>
+                <td>₹${Number(metrics.totalIncome).toFixed(2)}</td>
             </tr>
         `;
     });
@@ -394,6 +542,7 @@ function setupSettingsDropdown() {
 }
 
 function setupEventListeners() {
+    initializeMetricsVisibility();
     document.getElementById('toggleWebSocket').addEventListener('click', toggleWebSocket);
     document.getElementById('dashboardNav').addEventListener('click', () => switchView('printer'));
     document.getElementById('transactionNav').addEventListener('click', () => { switchView('transaction'); filterTransactions(); });
@@ -1102,7 +1251,7 @@ function updatePrinterQueue(printerName) {
         ? '<div class="job-item">No jobs in queue</div>'
         : queue.map(job => `
             <div class="job-item ${job.print_status}">
-                <span>Job ${job.job_id} - ${job.number_of_pages} pages (${job.color_mode})</span>
+                <span>Job ${job.id} - ${job.number_of_pages} pages (${job.color_mode})</span>
                 <span class="job-status">${job.print_status}</span>
             </div>
         `).join('');
@@ -1233,7 +1382,7 @@ function renderTransactionTable(transactions) {
     
     tableBody.innerHTML = transactions.map(job => `
         <tr>
-            <td>${job.job_id}</td>
+            <td>${job.id}</td>
             <td>${new Date(job.processed_timestamp).toLocaleString()}</td>
             <td>${job.file_path || job.file_name || 'N/A'}</td>
             <td>${job.assigned_printer || 'N/A'}</td>
@@ -1548,7 +1697,7 @@ function renderMetrics() {
     document.getElementById('totalPages').textContent = metrics.totalPages;
     document.getElementById('monochromeJobs').textContent = metrics.monochromeJobs;
     document.getElementById('colorJobs').textContent = metrics.colorJobs;
-    document.getElementById('totalIncome').textContent = `₹${metrics.totalIncome}`;
+    document.getElementById('totalIncome').textContent = `₹${Number(metrics.totalIncome).toFixed(2)}`;
 }
 
 function showNotification(message, type) {
@@ -1587,6 +1736,25 @@ function showNotification(message, type) {
         }, 3000);
     }
 }
+// Add to renderer.js, near other ipcRenderer.on handlers
+ipcRenderer.on('clear-auth-error', () => {
+    // Clear any authentication related notifications
+    const notificationContainer = document.getElementById('notificationContainer');
+    if (notificationContainer) {
+        // Remove any error notifications
+        const errorNotifications = notificationContainer.querySelectorAll('.notification.error');
+        errorNotifications.forEach(notification => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        });
+    }
+    
+    // Remove loading state from login button if it exists
+    const loginButton = document.getElementById('loginBtn');
+    if (loginButton) {
+        loginButton.classList.remove('loading');
+    }
+});
 
 ipcRenderer.on('update-available', () => {
     showNotification('Update available. Downloading...', 'info');
@@ -1615,7 +1783,7 @@ ipcRenderer.on('all-printers-discarded', () => {
 });
 
 ipcRenderer.on('print-job', (_event, job) => {
-    showNotification(`New job received: ${job.job_id}`, 'info');
+    showNotification(`New job received: ${job.id}`, 'info');
     fetchAndDisplayPrinters();
 });
 
@@ -1659,6 +1827,7 @@ ipcRenderer.on('log-message', (_event, message) => {
 // Update auth-success event listener to remove loading indicator
 ipcRenderer.on('auth-success', (_event, user) => {
     // Remove loading indicator
+ 
     const loadingIndicator = document.getElementById('authLoadingIndicator');
     if (loadingIndicator) {
         loadingIndicator.remove();
@@ -1669,6 +1838,15 @@ ipcRenderer.on('auth-success', (_event, user) => {
     
     // Show dashboard and other UI elements
     showDashboard();
+       const username = document.getElementById('user-name');
+    if (username) {
+        
+        username.innerHTML = user.shop_name;
+    }
+    const userEmail = document.getElementById('user-email');
+    if (userEmail) {
+        userEmail.innerHTML = user.email;
+    }
     
     // Show notifications based on account status
     if (user.kyc_verified) {
@@ -1703,7 +1881,20 @@ ipcRenderer.on('session-check-complete', () => {
     if (loadingIndicator) {
         loadingIndicator.remove();
     }
+    
+    // Show login form if no session
+    if (!currentUser) {
+        showAuthView();
+    }
 });
+
+setTimeout(() => {
+    const loadingIndicator = document.getElementById('authLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+        showAuthView();
+    }
+}, 5000); // 5 second timeout
 
 ipcRenderer.on('sign-out-success', () => {
     currentUser = null;
@@ -1823,7 +2014,7 @@ ipcRenderer.on("shop-info-fetched", (_event, shopInfo) => {
 ipcRenderer.on("shop-info-updated", (_event, { success, error }) => {
     if (success) {
         alert("Shop information updated successfully!");
-        ipcRenderer.send("fetch-shop-info"); // Refresh shop info
+        ipcRenderer.send("fetch-shop-info", currentUser.email); // Refresh shop info
     } else {
         alert(`Error updating shop information: ${error}`);
     }
@@ -1840,7 +2031,7 @@ document.getElementById("saveShopInfoBtn").addEventListener("click", () => {
     ipcRenderer.send("update-shop-info", updatedInfo);
 });
 
-ipcRenderer.send("fetch-shop-info"); // Fetch shop info on page load
+ipcRenderer.send("fetch-shop-info", currentUser.email); // Fetch shop info on page load
 
 function navigateToPage(page) {
     ipcRenderer.send('navigate', page);
@@ -2025,7 +2216,7 @@ async function submitKycFormFromOverlay() {
             document.getElementById('kycOverlayModal').classList.add('hidden');
             document.body.style.overflow = '';
             // Optionally refresh shop info or UI
-            ipcRenderer.send('fetch-shop-info');
+            ipcRenderer.send('fetch-shop-info', currentUser.email);
         } else {
             logKyc(`KYC submission failed: ${result.error}`);
             showNotification(`KYC submission failed: ${result.error}`, 'error');
