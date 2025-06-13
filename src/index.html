@@ -6,7 +6,7 @@
     <title>CTRL-P Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
     <!-- Authentication Pages -->
@@ -21,7 +21,7 @@
             <div class="logo-section">
                 <div>
                     <div class="logo">
-                        <img src="white.png" alt="Ctrl+P Logo">
+                        <img src="../assets/white.png" alt="Ctrl+P Logo">
                     </div>
                     <p class="slogan">Automated cloud printing solutions for modern businesses. Streamline your workflow with our innovative platform.</p>
                 </div>
@@ -130,7 +130,7 @@
         <div class="sidebar">
             <div>
                 <div class="logo">
-                    <img src="blue.png" alt="CTRL-P Logo" id="logo">
+                    <img src="../assets/blue.png" alt="CTRL-P Logo" id="logo">
                 </div>
                 <div class="nav-item" id="dashboardNav">
                     <a href="#"><i class="fas fa-home"></i><span>Dashboard</span></a>
@@ -154,7 +154,7 @@
                 </div>
                 <div class="user-dropdown">
                     <div class="user-info">
-                        <img src="printer.png" alt="User Avatar" class="user-avatar">
+                        <img src="../assets/printer.png" alt="User Avatar" class="user-avatar">
                         <div>
                             <div class="user-name" id="user-name">User Name</div>
                             <div class="user-email" id="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="eadfd9cfd8eacfd2cbc7dac6cf84c9c5c7">[email&#160;protected]</a></div>
@@ -208,24 +208,27 @@
                 </button>
                 </div>
                 <!-- Replace metrics section with daily metrics -->
-                <section id="metricsSection" class="metrics">
-                    <div class="metric-card">
-                        <div class="metric-title">Today's Total Pages</div>
-                        <div id="dailyTotalPages" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-title">Today's Monochrome Jobs</div>
-                        <div id="dailyMonochromeJobs" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-title">Today's Color Jobs</div>
-                        <div id="dailyColorJobs" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-title">Today's Total Income</div>
-                        <div id="dailyTotalIncome" class="metric-value">₹0</div>
-                    </div>
-                </section>
+<section id="metricsSection" class="metrics">
+    <div class="metric-card">
+        <div class="metric-title">Today's Total Pages</div>
+        <div id="dailyTotalPages" class="metric-value">0</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-title">Today's Jobs</div>
+        <div class="metric-value">
+            <span id="dailyMonochromeJobs" style="color: #000">0</span>/<span id="dailyColorJobs" style="color: #e74c3c">0</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-title">Today's Total Income</div>
+        <div id="dailyTotalIncome" class="metric-value">₹0</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-title"> Payout Eligible</div>
+        <div id="dailyPayout" class="metric-value">₹0</div>
+        <button id="requestPayoutBtn" class="payout-btn" disabled>Request Payout</button>
+    </div>
+</section>
                 
                 <div id="discardedPrinters" class="discarded-printers hidden">
                     <div class="discarded-printers-title">
@@ -235,7 +238,13 @@
                         <!-- Discarded printers will be added here dynamically -->
                     </div>
                 </div>
-                
+                <!-- Add this before the printersContainer div -->
+<div class="section-header">
+    <h2>Connected Printers</h2>
+    <button id="refreshPrintersBtn" class="refresh-button">
+        <i class="fas fa-sync-alt"></i> Refresh Printers
+    </button>
+</div>
                 <section id="printersContainer" class="printers-container"></section>
             </div>
 
@@ -259,8 +268,8 @@
                 <table class="transaction-table">
                     <thead>
                         <tr>
-                            <th>Job ID</th>
-                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Price</th>
                             <th>File</th>
                             <th>Printer</th>
                             <th>Pages</th>
@@ -350,10 +359,6 @@
                         <i class="fas fa-print"></i>
                         Printers
                     </button>
-                    <button class="settings-nav-button" data-section="kyc">
-                        <i class="fas fa-id-card"></i>
-                        KYC
-                    </button>
                     <button class="settings-nav-button" data-section="notifications">
                         <i class="fas fa-bell"></i>
                         Notifications
@@ -405,9 +410,6 @@
                                     </div>
                                     <div class="shop-info-actions">
                                         <button id="editShopInfoBtn" class="btn btn-primary">Edit Shop Details</button>
-                                        <button id="kycStatusBtn" class="btn btn-secondary mt-20">
-                                            <i class="fas fa-exclamation-circle"></i> Complete KYC
-                                        </button>
                                     </div>
                                 </div>
                                 
@@ -468,7 +470,6 @@
                                 </form>
                             </div>
                         </div>
-                        
                         <!-- Printers section -->
                         <div class="settings-section" id="printersSection">
                             <div class="settings-section-nav">
@@ -561,7 +562,7 @@
                             </div>
                         </div>
                          <!-- Add this inside the settings-content div in index.html -->
-<div class="settings-section" id="helpSection">
+                        <div class="settings-section" id="helpSection">
     <div class="settings-section-nav">
         <button class="settings-section-button active" data-tab="helpGuideTab">User Guide</button>
         <button class="settings-section-button" data-tab="helpSupportTab">Get Support</button>
@@ -641,7 +642,7 @@
             </div>
         </div>
     </div>
-</div>
+                        </div>
                         <!-- KYC section -->
                         <div class="settings-section" id="kycSection">
                             <div class="settings-section-nav">
@@ -693,60 +694,92 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Notifications section -->
-                        <div class="settings-section" id="notificationsSection">
-                            <div class="settings-section-nav">
-                                <button class="settings-section-button active" data-tab="notificationsEmailTab">Email Notifications</button>
-                                <button class="settings-section-button" data-tab="notificationsAppTab">App Notifications</button>
-                            </div>
-                            
-                            <!-- Existing tabs -->
-                            <div class="settings-tab active" id="notificationsEmailTab">
-                                <h2>Email Notification Preferences</h2>
-                                <form class="settings-form">
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="emailNewJobs" checked>
-                                        <label for="emailNewJobs">New Print Jobs</label>
-                                        <p class="text-sm text-gray-600">Receive email notifications when new print jobs are received</p>
-                                    </div>
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="emailCompleted" checked>
-                                        <label for="emailCompleted">Completed Jobs</label>
-                                        <p class="text-sm text-gray-600">Receive email notifications when jobs are completed</p>
-                                    </div>
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="emailFailed">
-                                        <label for="emailFailed">Failed Jobs</label>
-                                        <p class="text-sm text-gray-600">Receive email notifications when jobs fail</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary">Save Email Preferences</button>
-                                </form>
-                            </div>
-                            
-                            <div class="settings-tab" id="notificationsAppTab">
-                                <h2>App Notification Preferences</h2>
-                                <form class="settings-form">
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="appSoundNotification" checked>
-                                        <label for="appSoundNotification">Sound Alerts</label>
-                                        <p class="text-sm text-gray-600">Play sound when new print jobs arrive</p>
-                                    </div>
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="appBrowserNotification">
-                                        <label for="appBrowserNotification">Browser Notifications</label>
-                                        <p class="text-sm text-gray-600">Show desktop notifications for important alerts</p>
-                                    </div>
-                                    <div class="form-group checkbox-group">
-                                        <input type="checkbox" id="appInAppNotification" checked>
-                                        <label for="appInAppNotification">In-App Notifications</label>
-                                        <p class="text-sm text-gray-600">Show notifications within the app interface</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary">Save App Preferences</button>
-                                </form>
-                            </div>
                         </div>
-                    </div>
+                        <!-- Add this inside the settings-content div, after the printersSection div -->
+                        <div class="settings-section" id="notificationsSection">
+    <div class="settings-section-nav">
+        <button class="settings-section-button active" data-tab="notificationsAppTab">App Notifications</button>
+        <button class="settings-section-button" data-tab="notificationsEmailTab">Email Notifications</button>
+    </div>
+    
+    <!-- App Notifications Tab -->
+    <div class="settings-tab active" id="notificationsAppTab">
+        <h2>App Notification Settings</h2>
+        
+        <div class="settings-section-container">
+            <div class="form-group">
+                <label class="settings-label">Notification Sounds</label>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="notificationSoundsToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Enable notification sounds</span>
+                </div>
+                <p class="settings-description">Play sounds when notifications appear</p>
+            </div>
+            
+            <div class="form-group volume-control" id="volumeControlContainer">
+                <label class="settings-label">Volume</label>
+                <div class="volume-slider-container">
+                    <i class="fas fa-volume-down"></i>
+                    <input type="range" id="notificationVolume" min="0" max="100" value="75" class="volume-slider">
+                    <i class="fas fa-volume-up"></i>
+                </div>
+                <p class="settings-description">Adjust notification sound volume</p>
+            </div>
+            
+            <div class="form-group">
+                <label class="settings-label">Sound for Job Completions</label>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="jobCompletionSoundsToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Enable job completion announcements</span>
+                </div>
+                <p class="settings-description">Play sound when print jobs are completed</p>
+            </div>
+            
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="appBrowserNotification">
+                <label for="appBrowserNotification">Browser Notifications</label>
+                <p class="text-sm text-gray-600">Show desktop notifications for important alerts</p>
+            </div>
+            
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="appInAppNotification" checked>
+                <label for="appInAppNotification">In-App Notifications</label>
+                <p class="text-sm text-gray-600">Show notifications within the app interface</p>
+            </div>
+            
+            <button type="button" class="btn btn-primary" id="saveAppNotificationSettings">Save App Notification Settings</button>
+        </div>
+    </div>
+    
+    <!-- Email Notifications Tab -->
+    <div class="settings-tab" id="notificationsEmailTab">
+        <h2>Email Notification Preferences</h2>
+        <form class="settings-form">
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="emailNewJobs" checked>
+                <label for="emailNewJobs">New Print Jobs</label>
+                <p class="text-sm text-gray-600">Receive email notifications when new print jobs are received</p>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="emailCompleted" checked>
+                <label for="emailCompleted">Completed Jobs</label>
+                <p class="text-sm text-gray-600">Receive email notifications when jobs are completed</p>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="emailFailed">
+                <label for="emailFailed">Failed Jobs</label>
+                <p class="text-sm text-gray-600">Receive email notifications when jobs fail</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="saveEmailNotificationSettings">Save Email Preferences</button>
+        </form>
+    </div>
+</div>
 
                 </div>
             </div>
@@ -1177,33 +1210,7 @@
             });
             
             // Connect completeKycBtn to show the KYC tab in settings
-            document.getElementById('completeKycBtn').addEventListener('click', () => {
-                // Hide KYC overlay
-                document.getElementById('kycOverlay').classList.add('hidden');
-                
-                // Show dashboard and enable interactions
-                document.getElementById('dashboardView').style.pointerEvents = '';
-                
-                // Show settings view with KYC tab active
-                document.getElementById('printerView').style.display = 'none';
-                document.getElementById('transactionView').style.display = 'none';
-                document.getElementById('statisticsView').style.display = 'none';
-                
-                const settingsView = document.getElementById('settingsView');
-                settingsView.style.display = 'block';
-                
-                // Activate settings nav item
-                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-                document.getElementById('settingsNav').classList.add('active');
-                
-                // Show KYC tab
-                document.querySelectorAll('.settings-menu-item').forEach(tab => tab.classList.remove('active'));
-                document.querySelector('.settings-menu-item[data-tab="kyc"]').classList.add('active');
-                
-                document.querySelectorAll('.settings-tab').forEach(content => content.classList.remove('active'));
-                document.getElementById('kycTab').classList.add('active');
-            });
-
+      
             // Remove conflicting eventListener on testLoginBtn from HTML
             const testLoginBtn = document.getElementById('testLoginBtn');
             if (testLoginBtn) {
@@ -1213,7 +1220,7 @@
         });
     </script>
     <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
-    <script src="renderer.js"></script>
+    <script src="./renderer.js"></script>
     <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92da6515c90cb056',t:'MTc0NDIwNTgwMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>

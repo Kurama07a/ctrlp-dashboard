@@ -246,7 +246,52 @@ body.dark-mode {
     background: #2d3436;
     border-color: #4a5568;
 }
+/* Add to your existing CSS */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0 1rem;
+}
 
+.refresh-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.refresh-button:hover {
+    background-color: #357abd;
+}
+
+.refresh-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.refresh-button .refresh-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
 .dark-mode .test-mode-description {
     color: #a0aec0;
 }
@@ -273,7 +318,46 @@ body.dark-mode {
     margin-bottom: 16px;
     resize: vertical;
 }
+.notification-sound-group {
+    margin-top: 15px;
+    margin-left: 25px;
+    margin-bottom: 20px;
+}
 
+.radio-group-container {
+    margin-top: 10px;
+    border-left: 3px solid #e5e7eb;
+    padding-left: 15px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    gap: 8px;
+}
+
+.sound-description {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin: 0 0 15px 25px;
+}
+
+.btn-sm {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+}
+
+.btn-play {
+    background-color: #edf2f7;
+    border: 1px solid #cbd5e0;
+    cursor: pointer;
+}
+
+.btn-play:hover {
+    background-color: #e2e8f0;
+}
 #sendSupportMessage {
     width: 100%;
     display: flex;
@@ -856,7 +940,253 @@ body.dark-mode #dashboardView {
     border-radius: 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+/* Add to styles.css */
 
+/* Notification Settings Styles */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.toggle-label {
+    margin-left: 10px;
+    font-weight: 500;
+}
+
+.settings-description {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.volume-control {
+    margin-top: 15px;
+    padding-left: 20px;
+    border-left: 2px solid #eee;
+}
+
+.volume-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.volume-slider {
+    flex: 1;
+    height: 5px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #d3d3d3;
+    outline: none;
+    border-radius: 5px;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #4f8fea;
+    cursor: pointer;
+}
+
+.settings-section-container {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+    border: 1px solid #eee;
+}
+.retry-job-btn {
+    background-color: #f39c12;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 16px;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    margin-left: 4px;
+    margin-right: 4px;
+    box-shadow: 0 2px 6px rgba(243, 156, 18, 0.08);
+}
+
+.retry-job-btn:hover:not(:disabled) {
+    background-color: #e67e22;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.18);
+}
+
+.retry-job-btn:disabled {
+    background-color: #f8c471;
+    color: #fff;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Printer Selection Modal for Retry */
+.printer-select-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s;
+}
+
+.printer-select-content {
+    background: var(--card-background, #fff);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 32px 28px 24px 28px;
+    min-width: 320px;
+    max-width: 95vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: slideInModal 0.2s;
+}
+
+.printer-select-content h3 {
+    margin-bottom: 18px;
+    color: var(--primary, #0066cc);
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+#printerSelectDropdown {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 1em;
+    margin-bottom: 18px;
+    background: var(--background-color, #f9f9f9);
+    color: var(--text-dark, #222);
+    transition: border-color 0.2s;
+}
+
+#printerSelectDropdown:focus {
+    border-color: var(--primary, #0066cc);
+    outline: none;
+}
+
+.printer-select-content button {
+    margin: 0 8px;
+    padding: 8px 20px;
+    border-radius: 5px;
+    border: none;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#printerSelectConfirm {
+    background: #4a90e2;
+    color: #fff;
+}
+
+#printerSelectConfirm:hover {
+    background: #357abd;
+}
+
+#printerSelectCancel {
+    background: #e0e0e0;
+    color: #333;
+}
+
+#printerSelectCancel:hover {
+    background: #bdbdbd;
+}
+
+/* Dark mode support for modal */
+body.dark-mode .printer-select-content {
+    background: var(--dark-bg, #1a2236);
+    color: var(--text-light, #fff);
+}
+
+body.dark-mode #printerSelectDropdown {
+    background: #232b3e;
+    color: #fff;
+    border-color: #374151;
+}
+
+body.dark-mode #printerSelectConfirm {
+    background: #6c5ce7;
+    color: #fff;
+}
+
+body.dark-mode #printerSelectCancel {
+    background: #444;
+    color: #eee;
+}
+
+@media (max-width: 600px) {
+    .printer-select-content {
+        min-width: 90vw;
+        padding: 18px 8px 14px 8px;
+    }
+    #printerSelectDropdown {
+        font-size: 0.98em;
+    }
+    .printer-select-content button {
+        font-size: 0.98em;
+        padding: 8px 10px;
+    }
+}
+.settings-label {
+    font-weight: bold;
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Dark mode styles */
+.dark-mode .settings-section-container {
+    background: #2a2a2a;
+    border-color: #444;
+}
+/* Add to styles.css */
+.payout-btn {
+  margin-top: 10px;
+  padding: 6px 12px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s ease;
+}
+.payout-available {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+}
+.payout-btn:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.payout-btn:disabled {
+  background-color: #cccccc;
+  color: #888888;
+  cursor: not-allowed;
+}
+.dark-mode .settings-description {
+    color: #aaa;
+}
+
+.dark-mode .volume-slider {
+    background: #555;
+}
+
+.dark-mode .volume-control {
+    border-left-color: #444;
+}
 .header-metrics {
     display: flex;
     gap: 20px;

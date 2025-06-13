@@ -1,8 +1,8 @@
 {
   "name": "ctrlp-dashboard",
-  "version": "1.6.2",
+  "version": "1.7.2",
   "description": "CtrlP UI+ Backend and Dashboard",
-  "main": "main.js",
+  "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -30,24 +30,26 @@
     "files": [
       "dist/**/*",
       "node_modules/**/*",
-      "main.js",
+      "src/main.js",
       "package.json",
-      "renderer.js",
-      "index.html",
+      "src/renderer.js",
+      "src/index.html",
       ".env",
-      "icon.jpg",
-      "blue.png",
-      "white.png",
-      "styles.css",
-      "sessionManager.js",
-      "printer.png"
+      "assets/icon.jpg",
+      "assets/blue.png",
+      "asstes/white.png",
+      "src/styles.css",
+      "src/sessionManager.js",
+      "assets/printer.png",
+      "misc/SumatraPDF-3.4.6-32.exe",
+      "assets/**"
     ],
     "mac": {
       "category": "public.app-category.utilities"
     },
     "win": {
       "target": "nsis",
-      "icon": "icon.jpg"
+      "icon": "assets/icon.jpg"
     },
     "linux": {
       "target": "deb"
@@ -68,6 +70,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.10.0",
+    "say": "^0.16.0",
     "win32-api": "^26.1.2",
     "ws": "^8.18.1"
   },

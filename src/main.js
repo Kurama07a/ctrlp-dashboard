@@ -9,12 +9,10 @@ const { exec } = require("child_process");
 const util = require("util");
 const execAsync = util.promisify(exec);
 const { PDFDocument } = require("pdf-lib");
-// const electronReload = require("electron-reload"); // Added for hot reloading
 const { autoUpdater } = require("electron-updater");
-const SessionManager = require("./sessionManager"); // Added for session management
-const win32 = require("win32-api"); // Added for Windows printer detection
-// Enable hot reloading
-
+const SessionManager = require("./sessionManager"); 
+const win32 = require("win32-api"); 
+const say = require("say")
 const FIXED_PAPER_SIZES = ["A4", "A3", "Letter", "Legal"];
 const JOB_HISTORY_FILE = path.join(app.getPath("userData"), "jobHistory.json");
 const METRICS_FILE = path.join(app.getPath("userData"), "metrics.json");
@@ -24,13 +22,9 @@ const DAILY_METRICS_FILE = path.join(
 );
 const PRINTER_INFO_FILE = path.join(
   app.getPath("userData"),
-  "printerInfo.json"
+  "printerInfo.json"   
 );
-const SUPABASE_URL = "https://gtcqilbysfgbpitzjulg.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0Y3FpbGJ5c2ZnYnBpdHpqdWxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwMjQ4ODYsImV4cCI6MjA1NjYwMDg4Nn0.kVEvamqmWXaZoFK8qoKtSnP5acTO0y3HLv_Hf9muL7o";
-const BUCKET_NAME = "combined-pdfs";
-const WEBSOCKET_URL = "ws://ws.ctrlp.co.in:3001"; // Replace with your WebSocket URL
+ // Replace with your WebSocket URL
 const TEMP_DIR = path.join(app.getPath("temp"), "CtrlP"); // Change download directory to temp in appdata
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -54,7 +48,14 @@ let currentShopId = null;
 let currentSecret = null;
 let currentUser = null; // Added for session management
 let sessionManager; // Added for session management
-
+let localPrinterWs = null;
+let localPrinterReconnectTimer = null;
+let soundSettings = {
+    soundEnabled: true,
+    volume: 75,
+    jobCompletionSoundEnabled: true
+};
+let shop={}
 function log(message) {
   console.log(`[${new Date().toISOString()}] ${message}`);
   if (mainWindow) mainWindow.webContents.send("log-message", message);
@@ -194,15 +195,21 @@ function updateDailyMetrics(job) {
         colorJobs: 0,
         totalIncome: 0,
       };
+      log(`Created new daily metrics entry for ${today}`);
     }
+    
     const pagesUsed = job.number_of_pages;
     dailyMetrics[today].totalPages += pagesUsed;
+    
+    // Determine page cost based on color mode
     if (job.color_mode.toLowerCase() === "color") {
       dailyMetrics[today].colorJobs++;
     } else {
       dailyMetrics[today].monochromeJobs++;
-    }
-    dailyMetrics[today].totalIncome += job.amount * 0.8;
+    }    
+    dailyMetrics[today].totalIncome += job.amount;
+    log(`Updated daily metrics for ${today}: Total income is now ₹${dailyMetrics[today].totalIncome.toFixed(2)}`);
+    
     saveDailyMetrics();
     mainWindow.webContents.send("daily-metrics-updated", dailyMetrics);
   }
@@ -211,13 +218,21 @@ function updateDailyMetrics(job) {
 function updateMetrics(job) {
   if (job.print_status === "completed") {
     const pagesUsed = job.number_of_pages;
+    log(`Job ${job.id}: Updating overall metrics with ${pagesUsed} pages`);
     metrics.totalPages += pagesUsed;
+    
+    // Determine page cost based on color mode
+    let pageCost = 0;
     if (job.color_mode.toLowerCase() === "color") {
       metrics.colorJobs++;
     } else {
       metrics.monochromeJobs++;
     }
-    metrics.totalIncome += job.amount * 0.8;
+    
+    // Calculate commission percentage (default to 20% if not set)
+    metrics.totalIncome += job.amount;
+    log(`Updated overall metrics: Total income is now ₹${metrics.totalIncome.toFixed(2)}`);
+    
     saveMetrics();
     updateDailyMetrics(job);
     mainWindow.webContents.send("metrics-updated", metrics);
@@ -368,6 +383,70 @@ async function getPrintersFromWmic() {
   }
 }
 
+async function getPrintersFromPowerShell() {
+  const ps_script = `
+  $printers = Get-WmiObject Win32_Printer | Where-Object { $_.PortName -like 'USB*' }
+  $pnpDevices = Get-WmiObject Win32_PnPEntity | Where-Object { 
+      $_.PNPDeviceID -like 'USB\\*' -or $_.PNPDeviceID -like 'USBPRINT\\*' 
+  }
+
+  $results = @()
+  foreach ($printer in $printers) {
+      $usbDevice = $pnpDevices | Where-Object { 
+          $_.PNPDeviceID -eq $printer.PNPDeviceID -and $_.PNPDeviceID -like 'USB\\*' 
+      } | Select-Object -First 1
+      
+      if ($null -eq $usbDevice) {
+          $usbDevice = $pnpDevices | Where-Object { 
+              $_.PNPDeviceID -like 'USBPRINT\\*' -and $_.PNPDeviceID -like "*$($printer.Name)*" 
+          } | Select-Object -First 1
+      }
+
+      $printerInfo = @{
+          name = $printer.Name
+          port = $printer.PortName
+          deviceId = $printer.DeviceID
+          status = $printer.PrinterStatus
+          driverName = $printer.DriverName
+          location = if ($null -eq $printer.Location) { "Unknown" } else { $printer.Location }
+          isConnected = if ($null -eq $usbDevice) { $false } else { $true }
+          busAddress = if ($null -eq $usbDevice) { "Not Connected" } else { $usbDevice.PNPDeviceID }
+      }
+      $results += $printerInfo
+  }
+  ConvertTo-Json -InputObject $results -Compress
+  `;
+
+  try {
+    const scriptPath = path.join(app.getPath('temp'), 'printer_check.ps1');
+    await fsPromises.writeFile(scriptPath, ps_script);
+
+    const { stdout } = await execAsync(
+      `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`,
+      { maxBuffer: 1024 * 1024 }
+    );
+
+    await fsPromises.unlink(scriptPath);
+
+    const printers = JSON.parse(stdout);
+    return printers.filter(printer => 
+      printer.isConnected && 
+      printer.busAddress !== 'Not Connected' &&
+      printer.status !== 3
+    );
+  } catch (error) {
+    log('PowerShell printer detection failed:', error.message);
+    return [];
+  }
+}
+function hasValidPrinters() {
+  const availablePrinters = Object.keys(printerInfo.capabilities);
+  const nonDiscardedPrinters = availablePrinters.filter(
+    printer => !printerInfo.discardedPrinters.includes(printer)
+  );
+  return nonDiscardedPrinters.length > 0;
+}
+
 async function getPrintersFromWin32() {
   try {
     const printers = [];
@@ -405,39 +484,60 @@ async function getPrintersFromSystem32() {
 
 async function initializePrinters() {
   try {
-    // Try multiple methods to get printer list
     let allPrinters = [];
     
     // Method 1: PDF to Printer library
-    try {
-      allPrinters = await getPrintersFromWin32() ;
-    } catch (error) {
-      log('PDF to Printer detection failed:', error.message);
-    }
-
-    // Method 2: Win32 API
+    log('Attempting to detect printers using pdf-to-printer...');
+    allPrinters = await getPrintersFromWmic();
+    
+    // Method 2: PowerShell if first method fails
     if (!allPrinters.length) {
-      allPrinters = await getPrintersFromSystem32() ;
+      log('Trying PowerShell detection method...');
+      allPrinters = await getPrintersFromPowerShell();
     }
 
-    // Method 3: System32 PowerShell
+    // Method 3: WMIC if previous methods fail
     if (!allPrinters.length) {
-      allPrinters = await getPrintersFromWmic() ;
+      log('Trying WMIC detection method...');
+      allPrinters = await pdfToPrinter.getPrinters();
     }
 
-    // Method 4: WMIC command
+    // Method 4: Win32 API if previous methods fail
     if (!allPrinters.length) {
-      allPrinters = pdfToPrinter.getPrinters();
+      log('Trying Win32 API detection method...');
+      allPrinters = await getPrintersFromWin32();
     }
 
+    // Method 5: System32 PowerShell as last resort
     if (!allPrinters.length) {
-      throw new Error('No printers detected using any available method');
+      log('Trying System32 PowerShell detection method...');
+      allPrinters = await getPrintersFromSystem32();
     }
 
+    // If still no printers found, notify user and exit
+    if (!allPrinters.length) {
+      log('No printers detected using any available method');
+      mainWindow.webContents.send("printer-status", {
+        status: "error",
+        message: "No physical printers detected"
+      });
+      
+      // Close WebSocket if connected
+      if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+        closeWebSocket();
+        mainWindow.webContents.send("force-toggle-websocket", false);
+      }
+      return;
+    }
+
+    log(`Detected ${allPrinters.length} printers, filtering physical printers...`);
     const physicalPrinters = filterPhysicalPrinters(allPrinters);
+    log(`Found ${physicalPrinters.length} physical printers`);
 
+    // Initialize capabilities and queues for each physical printer
     for (const printer of physicalPrinters) {
       if (!printerInfo.capabilities[printer.name]) {
+        log(`Detecting capabilities for printer: ${printer.name}`);
         const capabilities = await detectPrinterCapabilities(printer.name);
         printerInfo.capabilities[printer.name] = capabilities;
         printerInfo.paperLevels[printer.name] = {};
@@ -445,14 +545,19 @@ async function initializePrinters() {
           printerInfo.paperLevels[printer.name][size] =
             printerInfo.paperLevels[printer.name][size] || 0;
         });
+        log(`Initialized capabilities for ${printer.name}`);
       }
+      
       if (!printerQueues.has(printer.name)) {
         printerQueues.set(printer.name, []);
+        log(`Initialized print queue for ${printer.name}`);
       }
     }
 
+    // Clean up disconnected printers
     for (const printerName of Object.keys(printerInfo.capabilities)) {
       if (!physicalPrinters.some((p) => p.name === printerName)) {
+        log(`Removing disconnected printer: ${printerName}`);
         delete printerInfo.capabilities[printerName];
         delete printerInfo.paperLevels[printerName];
         printerQueues.delete(printerName);
@@ -460,12 +565,19 @@ async function initializePrinters() {
     }
 
     savePrinterInfo();
+    log('Printer information saved successfully');
+    
     mainWindow.webContents.send("printer-info-updated", {
       printerInfo,
       printerQueues: Object.fromEntries(printerQueues),
     });
+    
   } catch (error) {
     log(`Error initializing printers: ${error.message}`);
+    mainWindow.webContents.send("printer-status", {
+      status: "error",
+      message: `Failed to initialize printers: ${error.message}`
+    });
   }
 }
 
@@ -592,7 +704,12 @@ class JobScheduler {
       return null;
     }
 
-    const allPrinters = await pdfToPrinter.getPrinters();
+    const allPrinters = Object.keys(printerInfo.capabilities).map(printerName => ({
+    name: printerName,
+    deviceId: printerName
+  }));
+    console.log('printerinfo', printerInfo)
+    console.log('line 697', allPrinters)
     const validPrinters = this.filterValidPrinters(allPrinters, job);
 
     if (validPrinters.length === 0) {
@@ -865,7 +982,7 @@ logPrinterSelection(job, validPrinters) {
           reason: "Print job finished",
         },
       };
-
+      //playJobCompletionSound(job.id, printerName);
       sendMessage(completedUpdate.type, completedUpdate.data);
       mainWindow.webContents.send("print-complete", job.id);
       mainWindow.webContents.send(
@@ -901,7 +1018,40 @@ logPrinterSelection(job, validPrinters) {
     }
   }
 }
-
+function playJobCompletionSound(jobId, printerName) {
+    try {
+        if (!soundSettings.jobCompletionSoundEnabled) {
+            log(`Job completion sound disabled for job ${jobId}`);
+            return;
+        }
+        
+        log(`Playing audio notification for job ${jobId}`);
+        
+        // Use different parameters based on platform
+        const platform = process.platform;
+        
+        if (platform === 'win32') {
+            // Windows
+            say.speak(`Print job started successfully on printer ${printerName}`, null, soundSettings.volume / 100);
+        } else if (platform === 'darwin') {
+            // macOS
+            say.speak(`Print job ${jobId} completed successfully`, null, soundSettings.volume / 100, (err) => {
+                if (err) {
+                    log(`Error playing audio notification: ${err.message}`);
+                }
+            });
+        } else {
+            // Linux and others
+            say.speak(`Print job ${jobId} completed successfully`, null, soundSettings.volume / 100, (err) => {
+                if (err) {
+                    log(`Error playing audio notification: ${err.message}`);
+                }
+            });
+        }
+    } catch (error) {
+        log(`Error playing job completion sound: ${error.message}`);
+    }
+}
 const scheduler = new JobScheduler();
 
 async function processPrintJob(event, job) {
@@ -960,22 +1110,18 @@ async function processPrintJob(event, job) {
 
 async function printJobWithWrappers(filePath, printOptions, job) {
   try {
+    let coverPage = 0;
     // Load the PDF to determine the total number of pages
-    const pdfBytes = await fsPromises.readFile(filePath);
+    const pdfBytes = await fs.promises.readFile(filePath);
     const pdfDoc = await PDFDocument.load(pdfBytes);
     const totalPages = pdfDoc.getPageCount();
-    console.log(totalPages);
-    if (totalPages < 2) {
-      throw new Error(
-        "The document must have at least 3 pages (cover, content, and end page)."
-      );
-    }
-
+    if(job.number_of_pages/job.copies < totalPages) 
+      coverPage = 1;
     // Check if we need special handling for landscape or duplex
     const needsSpecialHandling =
-      printOptions.orientation === "landscape" ||
+      (printOptions.orientation === "landscape" ||
       (job.duplex && job.duplex !== "simplex") ||
-      printOptions.copies > 1;
+      printOptions.copies > 1) && coverPage === 1;
 
     if (needsSpecialHandling) {
       // Print the first page (cover invoice) with default settings
@@ -983,21 +1129,20 @@ async function printJobWithWrappers(filePath, printOptions, job) {
         printer: printOptions.printer,
         pages: "1",
         copies: 1,
-        monochrome: true, // Default to monochrome for the cover
+        monochrome: true,
       };
-      await pdfToPrinter.print(filePath, firstPageOptions);
-      log(`Printed the first page (cover) for job ${job.id}`);
+      
 
       // Print the main content with the provided print options
       const mainContentOptions = {
         ...printOptions,
-        pages: `2-${totalPages}`, // Exclude the first and last pages
+        pages: `2-${totalPages}`,
       };
       await pdfToPrinter.print(filePath, mainContentOptions);
       log(`Printed the main content for job ${job.id}`);
 
-      // Print the last page (end invoice) with default settings
-      log(`Printed the last page (end invoice) for job ${job.id}`);
+      await pdfToPrinter.print(filePath, firstPageOptions);
+      log(`Printed the first page (cover) for job ${job.id}`);
     } else {
       // For normal portrait/simplex jobs, print everything at once
       await pdfToPrinter.print(filePath, printOptions);
@@ -1011,6 +1156,21 @@ async function printJobWithWrappers(filePath, printOptions, job) {
     log(`Error printing job ${job.id}: ${error.message}`);
     throw error;
   }
+}
+
+
+// Helper function to create a blank page
+async function createBlankPage() {
+  const pdfDoc = await PDFDocument.create();
+  // Default to A4 size
+  pdfDoc.addPage([595, 842]); // A4 size in points
+  
+  // Save the blank PDF to a temporary file
+  const blankPdfBytes = await pdfDoc.save();
+  const blankPdfPath = path.join(TEMP_DIR, `blank-${Date.now()}.pdf`);
+  await fsPromises.writeFile(blankPdfPath, blankPdfBytes);
+  
+  return blankPdfPath;
 }
 
 async function downloadFileFromSupabase(fileName) {
@@ -1044,12 +1204,36 @@ function createPrintOptions(job, printer) {
 
 
 function toggleWebSocket(_event, connect) {
-  if (connect) initializeWebSocket();
-  else closeWebSocket();
+  if (connect) {
+    // Check for valid printers before allowing connection
+    if (!hasValidPrinters()) {
+      log("Cannot initialize WebSocket: No valid printers available");
+      mainWindow.webContents.send("websocket-status", {
+        status: "error",
+        message: "No physical printers detected. Please connect a printer first."
+      });
+      mainWindow.webContents.send("force-toggle-websocket", false);
+      return;
+    }
+    initializeWebSocket();
+  } else {
+    closeWebSocket();
+  }
   isConnected = connect;
 }
 
+
 function initializeWebSocket() {
+
+   if (!hasValidPrinters()) {
+    log("Cannot initialize WebSocket: No valid printers available");
+    mainWindow.webContents.send("websocket-status", {
+      status: "error",
+      message: "No physical printers detected"
+    });
+    return;
+  }
+
   if (areAllPrintersDiscarded(printerInfo.discardedPrinters)) {
     log("Cannot initialize WebSocket: All printers are discarded");
     mainWindow.webContents.send("websocket-status", "disabled");
@@ -1129,6 +1313,15 @@ function closeWebSocket() {
   webSocket = null;
   isConnected = false;
   mainWindow.webContents.send("websocket-status", "disconnected");
+
+  if (localPrinterWs) {
+    localPrinterWs.close();
+    localPrinterWs = null;
+  }
+  if (localPrinterReconnectTimer) {
+    clearInterval(localPrinterReconnectTimer);
+    localPrinterReconnectTimer = null;
+  }
 }
 
 function sendMessage(type, data) {
@@ -1140,6 +1333,8 @@ function sendMessage(type, data) {
 }
 
 // Modify handleLogin to save user session
+// ...existing code...
+
 async function handleLogin(event, { email, password }) {
   try {
     const { data: account, error: accountError } = await supabase
@@ -1150,20 +1345,19 @@ async function handleLogin(event, { email, password }) {
       .single();
 
     if (accountError) throw accountError;
-
-    let kyc_verified = false;
-    if (account.shop_id) {
-      const { data: shop, error: shopError } = await supabase
-        .from("print_shops")
-        .select("id")
-        .eq("id", account.shop_id)
-        .single();
-
-      if (!shopError && shop) {
-        kyc_verified = true;
-      }
+    
+    // Fetch complete shop data (from both tables)
+    const shopDataResult = await fetchCompleteShopData(email);
+    if (!shopDataResult.success) {
+      throw new Error(shopDataResult.error);
     }
-
+    
+    // Set kyc_verified based on shop_id and other potential factors
+    let kyc_verified = false;
+    if (account.shop_id && shop.id) {
+      kyc_verified = true;
+    }
+    
     currentShopId = account.shop_id || null;
     currentSecret = account.secret;
 
@@ -1173,9 +1367,12 @@ async function handleLogin(event, { email, password }) {
       email: account.email,
       shop_id: account.shop_id || null,
       kyc_verified,
-      secret: account.secret, // Store the secret for session restoration
+      secret: account.secret,
+      shop_color_cost: shop.shop_color_cost,
+      shop_bw_cost: shop.shop_bw_cost, 
+      shop_commission: shop.shop_commission
     };
-
+    
     // Save the user session
     sessionManager.saveSession(user);
     currentUser = user;
@@ -1188,14 +1385,12 @@ async function handleLogin(event, { email, password }) {
     } else {
       mainWindow.webContents.send("kyc-required");
     }
-    console.log("User session saved:", user);
-    await fetchShopInfo(user.email);
+    log("User session saved:", user);
   } catch (error) {
     log(`Login error: ${error.message}`);
     event.reply("auth-error", error.message || "Invalid credentials");
   }
 }
-
 // Also update the test login to save session
 async function handleTestLogin(event) {
   try {
@@ -1407,40 +1602,95 @@ function generatePrintSettingsCode(settings) {
 
   return code;
 }
-
-async function fetchShopInfo(userEmail) {
+async function fetchCompleteShopData(userEmail) {
   try {
-    const { data, error } = await supabase
+    log(`Fetching complete shop data for ${userEmail}`);
+    
+    // First fetch basic shop account data
+    const { data: accountData, error: accountError } = await supabase
       .from("shop_accounts")
-      .select(
-        "shop_name, owner_name, contact_number, email, address, city, state, pincode, gst_number, kyc_status, updated_at"
-      )
+      .select("*")
       .eq("email", userEmail)
       .single();
-
-    if (error) throw error;
-
+      
+    if (accountError) throw accountError;
+    
+    // Store the shop account data
     shopInfo = {
-      shop_name: data.shop_name || "Not Provided",
-      owner_name: data.owner_name || "Not Provided",
-      contact_number: data.contact_number || "Not Provided",
-      email: data.email || "Not Provided",
-      address: data.address || "Not Provided",
-      city: data.city || "Not Provided",
-      state: data.state || "Not Provided",
-      pincode: data.pincode || "Not Provided",
-      gst_number: data.gst_number || "Not Provided",
-      kyc_status: data.kyc_status || "waiting for document upload",
-      updated_at: data.updated_at || new Date().toISOString(),
+      id: accountData.id,
+      shop_name: accountData.shop_name || "Not Provided",
+      owner_name: accountData.owner_name || "Not Provided",
+      contact_number: accountData.contact_number || "Not Provided",
+      email: accountData.email || "Not Provided",
+      address: accountData.address || "Not Provided",
+      city: accountData.city || "Not Provided",
+      state: accountData.state || "Not Provided",
+      pincode: accountData.pincode || "Not Provided",
+      gst_number: accountData.gst_number || "Not Provided",
+      kyc_status: accountData.kyc_status || "waiting for document upload",
+      updated_at: accountData.updated_at || new Date().toISOString(),
+      shop_id: accountData.shop_id || null,
+      // Add any other fields from shop_accounts you need
     };
-
+    
+    let shopData = {};
+    
+    // If there's a shop_id, fetch the associated print_shops data
+    if (accountData.shop_id) {
+      const { data: printShopData, error: shopError } = await supabase
+        .from("print_shops")
+        .select("*")
+        .eq("id", accountData.shop_id)
+        .single();
+        
+      if (!shopError && printShopData) {
+        shopData = printShopData;
+        
+        // Update shop variable with the latest data
+        shop = printShopData;
+        
+        // Combine shop info with printShopData for comprehensive info
+        shopInfo = {
+          ...shopInfo,
+          shop_bw_cost: printShopData.shop_bw_cost,
+          shop_color_cost: printShopData.shop_color_cost,
+          shop_commission: printShopData.shop_commission,
+          supported_settings: printShopData.supported_settings,
+          cover_page_mode: printShopData.cover_page_mode
+          // Add any other fields from print_shops you need
+        };
+        
+        log(`Fetched complete shop data for ${userEmail} with shop ID ${accountData.shop_id}`);
+      } else {
+        log(`Shop with ID ${accountData.shop_id} not found or error: ${shopError?.message}`);
+      }
+    }
+    
+    // Send the updated shop info to the renderer
     mainWindow.webContents.send("shop-info-fetched", shopInfo);
-    log("Shop information fetched successfully");
-    return {success: true, data: shopInfo};
+    
+    return {
+      success: true, 
+      data: shopInfo,
+      accountData: accountData,
+      shopData: shopData
+    };
   } catch (error) {
-    log(`Error fetching shop information: ${error.message}`);
-    mainWindow.webContents.send("shop-info-fetched", { error: error.message });
+    log(`Error fetching complete shop data: ${error.message}`);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+}
 
+async function fetchShopInfo(userEmail) {
+  const result = await fetchCompleteShopData(userEmail);
+  
+  if (!result.success) {
+    // Handle failure case like before
+    mainWindow.webContents.send("shop-info-fetched", { error: result.error });
+    
     currentShopId = null;
     currentSecret = null;
     currentUser = null;
@@ -1450,8 +1700,9 @@ async function fetchShopInfo(userEmail) {
       "Session expired. Please log in again."
     );
     closeWebSocket();
-    return { success: false, error: error.message };
   }
+  
+  return result;
 }
 
 async function updateShopInfo(updatedInfo) {
@@ -1518,125 +1769,7 @@ async function uploadDocumentToBucket(bucketName, filePath, fileName) {
     throw error;
   }
 }
-ipcMain.handle('save-temp-file', async (_event, { name, buffer }) => {
-    const tempDir = path.join(app.getPath('temp'), 'CtrlP-KYC');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-    }
-    
-    const tempPath = path.join(tempDir, `${Date.now()}-${name}`);
-    await fsPromises.writeFile(tempPath, buffer);
-    return tempPath;
-});
-ipcMain.handle("submit-kyc-data", async (_event, kycData) => {
-  logKyc("Received submit-kyc-data IPC call", kycData);
-  try {
-    console.log("Received KYC data:", kycData);
 
-    // Validate required fields
-    const requiredFields = [
-      "address",
-      "aadhaar",
-      "pan_card_path",
-      "bank_proof_path",
-      "passport_photo_path",
-    ];
-    for (const field of requiredFields) {
-      if (!kycData[field]) {
-        logKyc(`Missing required field: ${field}`);
-        throw new Error(`Missing required field: ${field}`);
-      }
-    }
-
-    // Validate file paths
-    const fileFields = [
-      "aadhaar",
-      "pan_card_path",
-      "bank_proof_path",
-      "passport_photo_path",
-    ];
-    for (const field of fileFields) {
-      if (!fs.existsSync(kycData[field])) {
-        logKyc(`File not found: ${kycData[field]}`);
-        throw new Error(`File not found: ${kycData[field]}`);
-      }
-    }
-
-    // Fetch shop account
-    const { data: shopAccount, error: accountError } = await supabase
-      .from("shop_accounts")
-      .select("id")
-      .eq("email", shopInfo.email)
-      .single();
-
-    if (accountError || !shopAccount) {
-      logKyc("Shop account error", accountError?.message || "No account found");
-      throw new Error("Shop account not found");
-    }
-
-    const shopId = shopAccount.id;
-    const identifier = `${shopId}-${Date.now()}`;
-
-    // Define bucket mapping
-    const docTypes = {
-      aadhaar: "aadhar",
-      pan_card_path: "pan",
-      bank_proof_path: "bank-proof",
-      passport_photo_path: "passport-photos",
-    };
-
-    const uploadedPaths = {};
-    for (const [field, bucket] of Object.entries(docTypes)) {
-      const filePath = kycData[field];
-      const docType =
-        field === "aadhar" ? "aadhaar-front" : field.replace("_path", "");
-      const fileName = `${identifier}-${docType}`;
-      logKyc(`Uploading document: ${field} to bucket: ${bucket}`);
-      uploadedPaths[field] = await uploadDocumentToBucket(
-        bucket,
-        filePath,
-        fileName
-      );
-      logKyc(`Uploaded ${field} to ${bucket}: ${uploadedPaths[field]}`);
-    }
-
-    // Prepare KYC payload
-    const kycPayload = {
-      address: kycData.address,
-      state: kycData.state,
-      aadhaar: uploadedPaths.aadhaar,
-      pan_card_path: uploadedPaths.pan_card_path,
-      bank_proof_path: uploadedPaths.bank_proof_path,
-      passport_photo_path: uploadedPaths.passport_photo_path,
-      account_holder_name: kycData.account_holder_name,
-      account_number: kycData.account_number,
-      ifsc_code: kycData.ifsc_code,
-      bank_name: kycData.bank_name,
-      branch_name: kycData.branch_name,
-      kyc_status: "under_review",
-      updated_at: new Date().toISOString(),
-    };
-
-    logKyc("Updating shop_accounts with KYC payload", kycPayload);
-
-    // Update shop account
-    const { error: updateError } = await supabase
-      .from("shop_accounts")
-      .update(kycPayload)
-      .eq("id", shopId);
-
-    if (updateError) {
-      logKyc("Error updating KYC data", updateError.message);
-      throw updateError;
-    }
-
-    logKyc("KYC data submitted successfully");
-    return { success: true };
-  } catch (error) {
-    logKyc("Error submitting KYC data", error.message);
-    return { success: false, error: error.message };
-  }
-});
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -1651,7 +1784,7 @@ function createMainWindow() {
     },
   });
   
-  mainWindow.loadFile("index.html");
+  mainWindow.loadFile("src/index.html");
     mainWindow.webContents.on('did-finish-load', () => {
     checkForSavedSession();});
 
@@ -1660,6 +1793,8 @@ function createMainWindow() {
 
 // Update the checkForSavedSession function
 // main.js
+// ...existing code...
+
 async function checkForSavedSession() {
   try {
     const savedUser = sessionManager.loadSession();
@@ -1671,34 +1806,74 @@ async function checkForSavedSession() {
 
     console.log('Found saved session, attempting to restore...');
 
-    // Set current user data
+    // Set current user data from saved session
     currentUser = savedUser;
     currentShopId = savedUser.shop_id || null;
     currentSecret = savedUser.secret;
     console.log('Current user:', currentUser);
+
     try {
-      // Verify the session by fetching shop info
-      const result = await fetchShopInfo(savedUser.email);
-      
-      if (result.success) {
-        mainWindow.webContents.send('auth-success', savedUser);
-        if (savedUser.kyc_verified) {
+      // Try to verify the session by fetching complete shop data
+      const shopDataResult = await fetchCompleteShopData(savedUser.email);
+
+      if (shopDataResult.success) {
+        // ...existing code for successful restore...
+        currentUser = {
+          ...currentUser,
+          shop_color_cost: shop.shop_color_cost,
+          shop_bw_cost: shop.shop_bw_cost,
+          shop_commission: shop.shop_commission,
+          cover_page_mode: shop.cover_page_mode
+        };
+        sessionManager.saveSession(currentUser);
+        mainWindow.webContents.send('auth-success', currentUser);
+        const kyc_verified = !!(savedUser.shop_id && shop.id);
+        if (kyc_verified) {
           mainWindow.webContents.send('kyc-verified');
         } else {
           mainWindow.webContents.send('kyc-required');
         }
+        log(`Session restored successfully for ${savedUser.email}`);
       } else {
-        throw new Error(result.error);
+        // If error is due to network, keep session and notify offline
+        if (
+          shopDataResult.error &&
+          (
+            shopDataResult.error.toLowerCase().includes('network') ||
+            shopDataResult.error.toLowerCase().includes('offline') ||
+            shopDataResult.error.toLowerCase().includes('fetch') ||
+            shopDataResult.error.toLowerCase().includes('timeout')
+          )
+        ) {
+          log('Offline: Could not verify session, but keeping saved session.');
+          mainWindow.webContents.send('offline-session', currentUser);
+          // Optionally, send a UI notification about offline mode
+        } else {
+          // Only clear session for non-network errors
+          throw new Error(shopDataResult.error);
+        }
       }
-      
     } catch (error) {
       console.error('Failed to verify session:', error);
-      // Invalid session, clear it
-      sessionManager.clearSession();
-      currentUser = null;
-      currentShopId = null;
-      currentSecret = null;
-      mainWindow.webContents.send('session-check-complete');
+      // Only clear session for non-network errors
+      if (
+        error.message &&
+        (
+          error.message.toLowerCase().includes('network') ||
+          error.message.toLowerCase().includes('offline') ||
+          error.message.toLowerCase().includes('fetch') ||
+          error.message.toLowerCase().includes('timeout')
+        )
+      ) {
+        log('Offline: Could not verify session, but keeping saved session.');
+        mainWindow.webContents.send('offline-session', currentUser);
+      } else {
+        sessionManager.clearSession();
+        currentUser = null;
+        currentShopId = null;
+        currentSecret = null;
+        mainWindow.webContents.send('session-check-complete');
+      }
     }
   } catch (error) {
     console.error('Error checking saved session:', error);
@@ -1717,14 +1892,15 @@ app.whenReady().then(async () => {
     },
   });
   createMainWindow();
+  initializePrinters();
+ 
   loadJobHistory();
   loadPrinterInfo();
-  initializePrinters();
+  
   setupIpcHandlers();
   loadMetrics();
   loadDailyMetrics();
-
-  // Check for saved session after window is created
+  log("initializing local printer monitor"); 
   checkForSavedSession();
 
   setupAutoUpdater();
@@ -1865,11 +2041,113 @@ function setupAutoUpdater() {
 
 // ipcMain handlers
 function setupIpcHandlers() {
+
+  
+  // Add this to your setupIpcHandlers() function
+
+ipcMain.handle('request-payout', async (_event, payoutData) => {
+  try {
+    log(`Processing payout request for shop: ${payoutData.shopName}, amount: ₹${payoutData.payoutAmount}`);
+    
+    // Validate payout request
+    if (Number(payoutData.payoutAmount) < 100) {
+      return {
+        success: false,
+        error: "Payout amount must be at least ₹100"
+      };
+    }
+    
+    // Record payout request in daily metrics
+    const today = payoutData.payoutDate;
+    if (dailyMetrics[today]) {
+      dailyMetrics[today].payout = payoutData.payoutAmount;
+      saveDailyMetrics();
+      
+      // Send update to all windows
+      mainWindow.webContents.send("daily-metrics-updated", dailyMetrics);
+    }
+    
+    // Send email notification (dummy implementation)
+    // In a real implementation, this would call your mail server API
+    log(`Sending payout request email for ${payoutData.shopName}, amount: ₹${payoutData.payoutAmount}`);
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Send payout notification to server if websocket is connected
+    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+      sendMessage("PAYOUT_REQUEST", {
+        shopId: currentShopId,
+        shopName: payoutData.shopName,
+        shopEmail: payoutData.shopEmail,
+        payoutAmount: payoutData.payoutAmount,
+        payoutDate: today,
+        bankDetails: payoutData.bankDetails
+      });
+    }
+    
+    return { 
+      success: true,
+      message: 'Payout request processed successfully'
+    };
+  } catch (error) {
+    log(`Error processing payout request: ${error.message}`);
+    return {
+      success: false,
+      error: error.message || 'Failed to process payout request'
+    };
+  }
+});
+ipcMain.on('retry-print-job', async (_event, { jobId, printerName }) => {
+        try {
+            // Find the job in job history
+            const job = [...jobHistory.values()].find(j => j.id === jobId);
+            if (!job) {
+                log(`Retry failed: Job ${jobId} not found`);
+                return;
+            }
+
+            // Prepare a copy of the job for re-print (do not update metrics)
+            const retryJob = { ...job };
+            retryJob.print_status = 'retrying';
+            retryJob.processed_timestamp = new Date().toISOString();
+
+            // Print directly to the selected printer
+            const printOptions = createPrintOptions(retryJob, { name: printerName });
+            try {
+                const filePath = await downloadFileFromSupabase(retryJob.combined_file_path);
+                await printJobWithWrappers(filePath, printOptions, retryJob);
+                log(`Retried job ${jobId} on printer ${printerName} (no metrics updated)`);
+                mainWindow.webContents.send('print-complete', jobId);
+            } catch (err) {
+                log(`Retry print failed for job ${jobId}: ${err.message}`);
+                mainWindow.webContents.send('print-failed', jobId);
+            }
+        } catch (error) {
+            log(`Error in retry-print-job: ${error.message}`);
+        }
+    });
+ipcMain.handle('update-daily-metrics', async (_event, updatedMetrics) => {
+  try {
+    dailyMetrics = updatedMetrics;
+    saveDailyMetrics();
+    
+    mainWindow.webContents.send('daily-metrics-updated', dailyMetrics);
+    return { success: true };
+  } catch (error) {
+    log(`Error updating daily metrics: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+});
   ipcMain.handle("get-printers", getPrinters);
   ipcMain.on("update-discarded-printers", updateDiscardedPrinters);
   ipcMain.on("update-printer-paper-levels", updatePrinterPaperLevels);
   ipcMain.on("process-print-job", processPrintJob);
   ipcMain.on("toggle-websocket", toggleWebSocket);
+   ipcMain.on('update-sound-settings', (_event, settings) => {
+        soundSettings = settings;
+        log(`Updated sound settings: ${JSON.stringify(settings)}`);
+    });
   ipcMain.handle("get-job-history", () => {
     try {
       return [...jobHistory.values()];
@@ -1917,7 +2195,125 @@ function setupIpcHandlers() {
   ipcMain.on("update-shop-info", (_event, updatedInfo) =>
     updateShopInfo(updatedInfo)
   );
+  ipcMain.handle('save-temp-file', async (_event, { name, buffer }) => {
+    const tempDir = path.join(app.getPath('temp'), 'CtrlP-KYC');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    const tempPath = path.join(tempDir, `${Date.now()}-${name}`);
+    await fsPromises.writeFile(tempPath, buffer);
+    return tempPath;
+});
+ipcMain.handle("submit-kyc-data", async (event, kycData) => {
+  logKyc("Received submit-kyc-data IPC call", kycData);
+  try {
+    console.log("Received KYC data:", kycData);
 
+    // Validate required fields
+    const requiredFields = [
+      "address",
+      "aadhaar",
+      "pan_card_path",
+      "bank_proof_path",
+      "passport_photo_path",
+    ];
+    for (const field of requiredFields) {
+      if (!kycData[field]) {
+        logKyc(`Missing required field: ${field}`);
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    // Validate file paths
+    const fileFields = [
+      "aadhaar",
+      "pan_card_path",
+      "bank_proof_path",
+      "passport_photo_path",
+    ];
+    for (const field of fileFields) {
+      if (!fs.existsSync(kycData[field])) {
+        logKyc(`File not found: ${kycData[field]}`);
+        throw new Error(`File not found: ${kycData[field]}`);
+      }
+    }
+
+    // Fetch shop account
+    const { data: shopAccount, error: accountError } = await supabase
+      .from("shop_accounts")
+      .select("id")
+      .eq("email", shopInfo.email)
+      .single();
+
+    if (accountError || !shopAccount) {
+      logKyc("Shop account error", accountError?.message || "No account found");
+      throw new Error("Shop account not found");
+    }
+
+    const shopId = shopAccount.id;
+    const identifier = `${shopId}-${Date.now()}`;
+
+    // Define bucket mapping
+    const docTypes = {
+      aadhaar: "aadhar",
+      pan_card_path: "pan",
+      bank_proof_path: "bank-proof",
+      passport_photo_path: "passport-photos",
+    };
+
+    const uploadedPaths = {};
+    for (const [field, bucket] of Object.entries(docTypes)) {
+      const filePath = kycData[field];
+      const docType =
+        field === "aadhar" ? "aadhaar-front" : field.replace("_path", "");
+      const fileName = `${identifier}-${docType}`;
+      logKyc(`Uploading document: ${field} to bucket: ${bucket}`);
+      uploadedPaths[field] = await uploadDocumentToBucket(
+        bucket,
+        filePath,
+        fileName
+      );
+      logKyc(`Uploaded ${field} to ${bucket}: ${uploadedPaths[field]}`);
+    }
+
+    // Prepare KYC payload
+    const kycPayload = {
+      address: kycData.address,
+      state: kycData.state,
+      aadhaar: uploadedPaths.aadhaar,
+      pan_card_path: uploadedPaths.pan_card_path,
+      bank_proof_path: uploadedPaths.bank_proof_path,
+      passport_photo_path: uploadedPaths.passport_photo_path,
+      account_holder_name: kycData.account_holder_name,
+      account_number: kycData.account_number,
+      ifsc_code: kycData.ifsc_code,
+      bank_name: kycData.bank_name,
+      branch_name: kycData.branch_name,
+      kyc_status: "under_review",
+      updated_at: new Date().toISOString(),
+    };
+
+    logKyc("Updating shop_accounts with KYC payload", kycPayload);
+
+    // Update shop account
+    const { error: updateError } = await supabase
+      .from("shop_accounts")
+      .update(kycPayload)
+      .eq("id", shopId);
+
+    if (updateError) {
+      logKyc("Error updating KYC data", updateError.message);
+      throw updateError;
+    }
+
+    logKyc("KYC data submitted successfully");
+    return { success: true };
+  } catch (error) {
+    logKyc("Error submitting KYC data", error.message);
+    return { success: false, error: error.message };
+  }
+});
 
   // Add to main.js in the setupIpcHandlers function
   ipcMain.handle(
@@ -2077,3 +2473,102 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+function initializeLocalPrinterMonitor() {
+  if (localPrinterWs) {
+    log('Closing existing local printer WebSocket connection');
+    localPrinterWs.close();
+  }
+
+  log('Attempting to connect to local printer monitor at ws://localhost:8765');
+  localPrinterWs = new WebSocket('ws://localhost:8765');
+
+  localPrinterWs.on('open', () => {
+    log('Successfully connected to local printer monitor');
+    if (localPrinterReconnectTimer) {
+      clearInterval(localPrinterReconnectTimer);
+      localPrinterReconnectTimer = null;
+    }
+  });
+
+// Add this to main.js where localPrinterWs.on('message') is handled
+
+// Update the local printer WebSocket message handler
+localPrinterWs.on('message', async (data) => {
+  log(`Received message from local printer monitor: ${data}`);
+  try {
+    const message = JSON.parse(data.toString());
+    log(`Parsed message: ${JSON.stringify(message)}`);
+    
+    if (message.type === 'printer_status') {
+      // Get list of all connected printers from the message
+      const connectedPrinters = message.data.filter(printer => 
+        printer.isConnected === true && 
+        printer.busAddress !== 'Not Connected' &&
+        printer.status !== 3
+      ).map(printer => printer.name);
+
+      // Get all printers we're currently tracking (both active and discarded)
+      const allTrackedPrinters = [
+        ...Object.keys(printerInfo.capabilities),
+        ...printerInfo.discardedPrinters
+      ];
+
+      // Remove any printer that's not in the connected printers list
+      allTrackedPrinters.forEach(printerName => {
+        if (!connectedPrinters.includes(printerName)) {
+          // Remove from capabilities
+          delete printerInfo.capabilities[printerName];
+          
+          // Remove from paper levels
+          delete printerInfo.paperLevels[printerName];
+          
+          // Remove from printer queues
+          printerQueues.delete(printerName);
+          
+          // Remove from discarded printers
+          printerInfo.discardedPrinters = printerInfo.discardedPrinters.filter(
+            name => name !== printerName
+          );
+          
+          log(`Completely removed disconnected printer: ${printerName}`);
+        }
+      });
+
+      // Save changes
+      savePrinterInfo();
+
+      // Notify renderer about changes
+      mainWindow.webContents.send('printer-info-updated', {
+        printerInfo,
+        printerQueues: Object.fromEntries(printerQueues)
+      });
+
+      // Update shop technical info if needed
+      if (currentShopId) {
+        updateShopTechnicalInfo();
+      }
+
+      log('Updated printer status based on connectivity');
+    }
+  } catch (error) {
+    log(`Error processing printer monitor message: ${error.message}`);
+  }
+});
+
+  localPrinterWs.on('close', () => {
+    log('Disconnected from local printer monitor. Attempting to reconnect...');
+    if (!localPrinterReconnectTimer) {
+      localPrinterReconnectTimer = setInterval(() => {
+        log('Reconnection attempt to local printer monitor');
+        initializeLocalPrinterMonitor();
+      }, 5000);
+    }
+  });
+
+  localPrinterWs.on('error', (error) => {
+    log(`Local printer monitor error: ${error.message}`);
+  });
+}
+
+// Update app.whenReady to initialize the local printer monitor

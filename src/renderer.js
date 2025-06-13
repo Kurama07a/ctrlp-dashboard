@@ -1,4 +1,5 @@
 const { ipcRenderer } = require('electron');
+const { once } = require('ws');
 
 let isConnected = false;
 let printerList = [];
@@ -10,7 +11,12 @@ let jobHistory = [];
 let currentView = 'printer';
 let currentUser = null;
 let dailyMetrics = {};
-
+let notificationSettings = {
+    soundEnabled: true,
+    volume: 75,
+    jobCompletionSoundEnabled: true
+};
+let ShopInfo ={};
 // Global object to store chart instances
 const chartInstances = {};
 
@@ -361,6 +367,7 @@ async function loadDailyMetrics() {
     }
 }
 
+// Update renderDailyMetrics function
 function renderDailyMetrics() {
     const today = new Date().toISOString().split("T")[0];
     const todayMetrics = dailyMetrics[today] || {
@@ -368,14 +375,156 @@ function renderDailyMetrics() {
         monochromeJobs: 0,
         colorJobs: 0,
         totalIncome: 0,
+        payouts: []
     };
 
     document.getElementById("dailyTotalPages").textContent = todayMetrics.totalPages;
     document.getElementById("dailyMonochromeJobs").textContent = todayMetrics.monochromeJobs;
     document.getElementById("dailyColorJobs").textContent = todayMetrics.colorJobs;
-    document.getElementById("dailyTotalIncome").textContent =`₹${Number(todayMetrics.totalIncome).toFixed(2)}`;
+    document.getElementById("dailyTotalIncome").textContent = `₹${Number(todayMetrics.totalIncome).toFixed(2)}`;
+
+    const payoutBtn = document.getElementById('requestPayoutBtn');
+    if (payoutBtn) {
+        const incomeThreshold = 100; // ₹100 threshold
+        const totalIncome = Number(todayMetrics.totalIncome);
+        
+        // Calculate total payout amount by summing all payouts for today
+        const payouts = todayMetrics.payouts || [];
+        const totalPayoutRequested = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+        
+        const availableForPayout = totalIncome - totalPayoutRequested;
+        
+        // Enable button if available income for payout is above threshold
+        payoutBtn.disabled = availableForPayout < incomeThreshold;
+        
+        // Update payout amount display - show available amount for payout
+        document.getElementById("dailyPayout").textContent = `₹${Number(availableForPayout).toFixed(2)}`;
+        
+        // Update button text and style based on state
+        if (availableForPayout >= incomeThreshold) {
+            payoutBtn.textContent = "Request Payout";
+            payoutBtn.classList.add("payout-available");
+        } else if (totalPayoutRequested > 0) {
+            // Some payout already requested
+            if (availableForPayout > 0) {
+                payoutBtn.textContent = `₹${Number(incomeThreshold - availableForPayout).toFixed(2)} more needed`;
+            } else {
+                payoutBtn.textContent = "All income paid out";
+            }
+            payoutBtn.classList.remove("payout-available");
+        } else {
+            // No payout requested yet
+            payoutBtn.textContent = `₹${Number(incomeThreshold - totalIncome).toFixed(2)} more to request`;
+            payoutBtn.classList.remove("payout-available");
+        }
+    }
 }
 
+// Update requestPayout function
+async function requestPayout() {
+    try {
+        const today = new Date().toISOString().split("T")[0];
+        const todayMetrics = dailyMetrics[today] || {
+            totalPages: 0,
+            monochromeJobs: 0,
+            colorJobs: 0,
+            totalIncome: 0,
+            payouts: []
+        };
+        
+        const totalIncome = Number(todayMetrics.totalIncome);
+        
+        // Calculate total payout amount by summing all payouts for today
+        const payouts = todayMetrics.payouts || [];
+        const totalPayoutRequested = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+        
+        const availableForPayout = totalIncome - totalPayoutRequested;
+        
+        // Ensure available amount is above threshold
+        if (availableForPayout < 100) {
+            showNotification("You need at least ₹100 available income to request a payout", "warning");
+            return;
+        }
+        
+        // Get user/shop information
+        const userInfo = currentUser || {};
+        
+        // Show loading state on button
+        const payoutBtn = document.getElementById('requestPayoutBtn');
+        if (payoutBtn) {
+            payoutBtn.disabled = true;
+            payoutBtn.textContent = "Processing...";
+        }
+        
+        // This payout amount is just the available amount above what's been already requested
+        const payoutAmount = availableForPayout;
+        
+        // Generate reference number (format: PAY-MMDD-XXX where XXX is sequence for the day)
+        // Generate truly random and unique reference for each shop
+        // Format: PAY-{shopIdentifier}-{timestamp}-{randomString}
+        const timestamp = Date.now().toString(36); // Convert timestamp to base36 for shorter string
+        const shopIdentifier = (ShopInfo.shop_name || userInfo.id || "shop")
+            .substring(0, 4)  // Take first 4 chars of shop name
+            .replace(/\s+/g, '')  // Remove spaces
+            .toUpperCase();
+        const randomString = Math.random().toString(36).substring(2, 8); // Generate random string
+        const reference = `PAY-${shopIdentifier}-${timestamp}-${randomString}`;
+        console.log(ShopInfo)
+        const payoutData = {
+            reference: reference,
+            shopName: ShopInfo.shop_name || "Unknown Shop",
+            shopEmail: ShopInfo.email || "Unknown Email",
+            shopId: userInfo.id || "Unknown ID",
+            payoutAmount: payoutAmount.toFixed(2),
+            payoutDate: today,
+            bankDetails: {
+                accountNumber: userInfo.bank_account || "Not provided",
+                ifscCode: userInfo.ifsc_code || "Not provided",
+                accountHolderName: userInfo.account_holder_name || userInfo.owner_name || "Not provided"
+            }
+        };
+        console.log("Payout data to send:", payoutData);
+        // Call API to send payout request email
+        const response = await ipcRenderer.invoke('request-payout', payoutData);
+        
+        if (response.success) {
+            // Create new payout entry
+            const newPayout = {
+                amount: payoutAmount,
+                timestamp: new Date().toISOString(),
+                status: "requested",
+                reference: reference
+            };
+            
+            // Update daily metrics to add this payout
+            if (!todayMetrics.payouts) {
+                todayMetrics.payouts = [];
+            }
+            todayMetrics.payouts.push(newPayout);
+            dailyMetrics[today] = todayMetrics;
+            
+            // Update UI
+            renderDailyMetrics();
+            
+            // Save updated metrics
+            await ipcRenderer.invoke('update-daily-metrics', dailyMetrics);
+            
+            showNotification(`Payout of ₹${payoutAmount.toFixed(2)} requested successfully! Reference: ${reference}`, "success");
+        } else {
+            throw new Error(response.error || "Failed to process payout request");
+        }
+    } catch (error) {
+        console.error("Payout request error:", error);
+        showNotification(`Error requesting payout: ${error.message}`, "error");
+        
+        // Reset button state
+        const payoutBtn = document.getElementById('requestPayoutBtn');
+        if (payoutBtn) {
+            payoutBtn.disabled = false;
+            payoutBtn.textContent = "Request Payout";
+        }
+    }
+}
 function renderEarningsTable() {
     const earningsTableBody = document.getElementById("earningsTableBody");
     earningsTableBody.innerHTML = "";
@@ -412,7 +561,34 @@ function updateButtonText() {
     button.classList.toggle('connected', isConnected);
     toggleSwitch.checked = isConnected;
 }
-
+function loadNotificationSettings() {
+    try {
+        const savedSettings = localStorage.getItem('notificationSettings');
+        if (savedSettings) {
+            notificationSettings = JSON.parse(savedSettings);
+            
+            // Update UI to reflect saved settings
+            const soundToggle = document.getElementById('notificationSoundsToggle');
+            const volumeSlider = document.getElementById('notificationVolume');
+            const jobCompletionToggle = document.getElementById('jobCompletionSoundsToggle');
+            const volumeContainer = document.getElementById('volumeControlContainer');
+            
+            if (soundToggle) soundToggle.checked = notificationSettings.soundEnabled;
+            if (volumeSlider) volumeSlider.value = notificationSettings.volume;
+            if (jobCompletionToggle) jobCompletionToggle.checked = notificationSettings.jobCompletionSoundEnabled;
+            
+            // Show/hide volume control based on sound toggle
+            if (volumeContainer) {
+                volumeContainer.style.display = notificationSettings.soundEnabled ? 'block' : 'none';
+            }
+            
+            // Send settings to main process
+            updateSoundSettingsInMain();
+        }
+    } catch (error) {
+        console.error('Error loading notification settings:', error);
+    }
+}
 function switchView(view) {
     currentView = view;
     const views = {
@@ -447,12 +623,6 @@ function switchView(view) {
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     const activeNavItem = document.getElementById(`${view}Nav`);
     if (activeNavItem) activeNavItem.classList.add('active');
-    
-    if (view === 'settings') {
-        document.getElementById('kycReminder')?.classList.add('hidden-on-settings');
-    } else {
-        document.getElementById('kycReminder')?.classList.remove('hidden-on-settings');
-    }
 }
 
 function setupSettingsDropdown() {
@@ -498,20 +668,6 @@ function setupSettingsDropdown() {
         }
     });
 
-    // Close the dropdown when clicking elsewhere
-    document.addEventListener('click', (e) => {
-        if (!settingsButton.contains(e.target) && !settingsDropdown.contains(e.target)) {
-            settingsDropdown.classList.add('hidden');
-            setTimeout(() => {
-                if (settingsDropdown.classList.contains('hidden')) {
-                    settingsDropdown.style.display = 'none';
-                }
-            }, 200);
-            settingsDropdown.style.opacity = '0';
-            settingsDropdown.style.transform = 'translateX(-10px)';
-        }
-    });
-
     // Set up click event listeners for dropdown items
     document.querySelectorAll('.settings-dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -542,14 +698,56 @@ function setupSettingsDropdown() {
 }
 
 function setupEventListeners() {
+    initializeNotificationSettings();
     initializeMetricsVisibility();
+    document.getElementById('requestPayoutBtn').addEventListener('click', requestPayout);
+    // Add this to your setupEventListeners function
+document.getElementById('saveAppNotificationSettings')?.addEventListener('click', () => {
+    // Get current values from UI
+    const soundEnabled = document.getElementById('notificationSoundsToggle').checked;
+    const volume = document.getElementById('notificationVolume').value;
+    const jobCompletionSoundEnabled = document.getElementById('jobCompletionSoundsToggle').checked;
+    
+    // Update settings object
+    notificationSettings = {
+        soundEnabled,
+        volume,
+        jobCompletionSoundEnabled
+    };
+    
+    // Save settings
+    saveNotificationSettings();
+    
+    // Show confirmation
+    showNotification('Notification settings saved successfully', 'success');
+});
     document.getElementById('toggleWebSocket').addEventListener('click', toggleWebSocket);
     document.getElementById('dashboardNav').addEventListener('click', () => switchView('printer'));
     document.getElementById('transactionNav').addEventListener('click', () => { switchView('transaction'); filterTransactions(); });
     document.getElementById('statisticsNav').addEventListener('click', () => switchView('statistics'));
     document.getElementById('settingsNav').addEventListener('click', () => switchView('settings'));
     document.getElementById('filterButton').addEventListener('click', filterTransactions);
+    document.getElementById('refreshPrintersBtn')?.addEventListener('click', async () => {
+        const button = document.getElementById('refreshPrintersBtn');
+        if (button) {
+            // Add loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="refresh-spinner"></span> Refreshing...';
+        }
 
+        try {
+            await fetchAndDisplayPrinters();
+            showNotification('Printer list refreshed successfully', 'success');
+        } catch (error) {
+            showNotification('Failed to refresh printer list', 'error');
+        } finally {
+            // Restore button state
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Printers';
+            }
+        }
+    });
     // Settings top navigation functionality
     const settingsNavButtons = document.querySelectorAll('.settings-nav-button');
     if (settingsNavButtons.length > 0) {
@@ -640,42 +838,14 @@ function setupEventListeners() {
         });
     });
 
-    // KYC modal overlay handling
-    document.getElementById('kycStatusBtn')?.addEventListener('click', () => {
-        logKyc('KYC Status button clicked');
-        const kycOverlayModal = document.getElementById('kycOverlayModal');
-        kycOverlayModal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // Prevent scrolling of background
-    });
 
-    // Close KYC modal buttons
-    document.querySelectorAll('.close-kyc-modal, .close-kyc-modal-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            logKyc('KYC modal close button clicked');
-            document.getElementById('kycOverlayModal').classList.add('hidden');
-            document.body.style.overflow = ''; // Restore scrolling
-        });
-    });
+
 
     // Submit KYC from overlay modal
-    document.getElementById('submitKycOverlayBtn')?.addEventListener('click', () => {
-        logKyc('Submit KYC button clicked');
-        submitKycFormFromOverlay();
-    });
-    
-    // View KYC details button
-    document.getElementById('viewKycDetailsBtn')?.addEventListener('click', () => {
-        logKyc('View KYC Details button clicked');
-        document.getElementById('kycOverlayModal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    });
+
     
     // Update KYC button
-    document.getElementById('updateKycBtn')?.addEventListener('click', () => {
-        logKyc('Update KYC button clicked');
-        document.getElementById('kycOverlayModal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    });
+
 
     // Shop info modal
     document.getElementById('editShopInfoBtn')?.addEventListener('click', () => {
@@ -691,17 +861,112 @@ function setupEventListeners() {
     });
 
     document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('add-paper-btn')) {
-            const [printerName, paperSize, amount] = e.target.dataset.info.split('|');
-            addPages(printerName, paperSize, parseInt(amount));
-        } else if (e.target.classList.contains('discard-printer-btn')) {
+         if (e.target.classList.contains('discard-printer-btn')) {
             discardPrinter(e.target.dataset.printer);
         } else if (e.target.classList.contains('restore-printer-btn')) {
             restorePrinter(e.target.dataset.printer);
         }
+    }, { once: true });
+}
+function saveNotificationSettings() {
+    localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
+    
+    // Send settings to main process
+    updateSoundSettingsInMain();
+}
+function updateSoundSettingsInMain() {
+    ipcRenderer.send('update-sound-settings', notificationSettings);
+}
+
+// Initialize sound settings UI
+function initializeNotificationSettings() {
+    // Default settings if none exist
+    if (!localStorage.getItem('notificationSettings')) {
+        notificationSettings = {
+            soundEnabled: true,
+            volume: 75,
+            jobCompletionSoundEnabled: true
+        };
+        saveNotificationSettings();
+    } else {
+        loadNotificationSettings();
+    }
+    
+    const soundToggle = document.getElementById('notificationSoundsToggle');
+    const volumeSlider = document.getElementById('notificationVolume');
+    const jobCompletionToggle = document.getElementById('jobCompletionSoundsToggle');
+    const volumeContainer = document.getElementById('volumeControlContainer');
+    
+    if (!soundToggle || !volumeSlider || !jobCompletionToggle || !volumeContainer) return;
+    
+    // Add event listeners
+    soundToggle.addEventListener('change', () => {
+        notificationSettings.soundEnabled = soundToggle.checked;
+        volumeContainer.style.display = soundToggle.checked ? 'block' : 'none';
+        saveNotificationSettings();
+        
+        // Play test sound if enabled
+        if (soundToggle.checked) {
+            playNotificationSound('test');
+        }
+    });
+    
+    volumeSlider.addEventListener('input', () => {
+        notificationSettings.volume = volumeSlider.value;
+        // We don't save on input to reduce writes
+    });
+    
+    volumeSlider.addEventListener('change', () => {
+        notificationSettings.volume = volumeSlider.value;
+        saveNotificationSettings();
+        
+        // Play test sound to demonstrate volume
+        if (notificationSettings.soundEnabled) {
+            playNotificationSound('test');
+        }
+    });
+    
+    jobCompletionToggle.addEventListener('change', () => {
+        notificationSettings.jobCompletionSoundEnabled = jobCompletionToggle.checked;
+        saveNotificationSettings();
     });
 }
 
+// Function to play notification sounds
+function playNotificationSound(type) {
+    if (!notificationSettings.soundEnabled) return;
+    
+    // Calculate volume (0-1 scale for Audio API)
+    const volume = notificationSettings.volume / 100;
+    
+    let sound;
+    switch(type) {
+        case 'success':
+            sound = new Audio('../assets/success.mp3');
+            break;
+        case 'error':
+            sound = new Audio('../assets/error.mp3');
+            break;
+        case 'warning':
+            sound = new Audio('../assets/warning.mp3');
+            break;
+        case 'info':
+            sound = new Audio('../assets/info.mp3');
+            break;
+        case 'job-completion':
+            if (!notificationSettings.jobCompletionSoundEnabled) return;
+            sound = new Audio('../assets/success.mp3');
+            break;
+        case 'test':
+            sound = new Audio('../assets/info.mp3');
+            break;
+        default:
+            sound = new Audio('../assets/notification.mp3');
+    }
+    
+    sound.volume = volume;
+    sound.play().catch(err => console.error('Error playing notification sound:', err));
+}
 // Function to load and display printer capabilities
 function loadPrinterCapabilities() {
     const printerSelector = document.getElementById('printerSelector');
@@ -1230,14 +1495,15 @@ function createPrinterCard(printer) {
             discardPrinter(printer.name);
         });
     }
-    
     const addPaperButtons = printerCard.querySelectorAll('.add-paper-btn');
     addPaperButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const [printerName, paperSize, amount] = button.getAttribute('data-info').split('|');
+        button.addEventListener('click', (e) => {
+            const [printerName, paperSize, amount] = e.target.dataset.info.split('|');
             addPages(printerName, paperSize, parseInt(amount));
+            e.stopPropagation();
         });
     });
+
 
     return printerCard;
 }
@@ -1379,18 +1645,129 @@ function renderTransactionTable(transactions) {
         tableBody.innerHTML = `<tr><td colspan="7" class="no-data">No transactions found for the selected date range.</td></tr>`;
         return;
     }
-    
-    tableBody.innerHTML = transactions.map(job => `
-        <tr>
-            <td>${job.id}</td>
-            <td>${new Date(job.processed_timestamp).toLocaleString()}</td>
-            <td>${job.file_path || job.file_name || 'N/A'}</td>
-            <td>${job.assigned_printer || 'N/A'}</td>
-            <td>${job.total_pages || job.number_of_pages * job.copies || 'N/A'}</td>
-            <td>${job.color_mode}</td>
-            <td>${job.print_status}</td>
-        </tr>
-    `).join('');
+
+    // Sort transactions by processed_timestamp in descending order (newest first)
+    transactions.sort((a, b) => {
+        return new Date(b.processed_timestamp) - new Date(a.processed_timestamp);
+    });
+
+    // Get today's date in YYYY-MM-DD format
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    tableBody.innerHTML = transactions.map(job => {
+        // Get job date in YYYY-MM-DD format
+        const jobDateStr = new Date(job.processed_timestamp).toISOString().split('T')[0];
+        // Show Retry button only if job is from today
+        const showRetry = jobDateStr === todayStr;
+        return `
+            <tr>
+                <td>${job.user_name}</td>
+                <td>${Number(job.amount).toFixed(2)}</td>
+                <td>${job.file_path || job.file_name || 'N/A'}</td>
+                <td>${job.assigned_printer || 'N/A'}</td>
+                <td>${job.total_pages || job.number_of_pages * job.copies || 'N/A'}</td>
+                <td>${job.color_mode}</td>
+                <td>${job.print_status}</td>
+                <td>
+                    ${showRetry ? `<button class="retry-job-btn" data-job-id="${job.id}">Retry</button>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+document.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('retry-job-btn')) {
+        const jobId = e.target.getAttribute('data-job-id');
+        console.log('[Retry] Retry button clicked for jobId:', jobId);
+
+        // Defensive: Ensure jobHistory is loaded and is an array
+        if (!Array.isArray(jobHistory)) {
+            console.error('[Retry] jobHistory is not an array:', jobHistory);
+            showNotification('Job history not loaded', 'error');
+            return;
+        }
+
+        // Find the job by id
+        const job = jobHistory.find(j => String(j.id) === String(jobId));
+        if (!job) {
+            console.error('[Retry] Job not found for id:', jobId, jobHistory);
+            showNotification('Job not found', 'error');
+            return;
+        }
+        console.log('[Retry] Found job:', job);
+
+        // Fetch available printers
+        let printersResult;
+        try {
+            printersResult = await ipcRenderer.invoke('get-printers'); // <-- FIXED
+            console.log('[Retry] Printers fetched:', printersResult);
+        } catch (err) {
+            console.error('[Retry] Error fetching printers:', err);
+            showNotification('Failed to fetch printers', 'error');
+            return;
+        }
+        const printers = printersResult?.printers || [];
+        if (!printers.length) {
+            showNotification('No printers available for retry', 'error');
+            return;
+        }
+
+        // Show printer selection dialog
+        let printerName;
+        try {
+            printerName = await showPrinterSelectionDialog(printers.map(p => p.name));
+            console.log('[Retry] Printer selected:', printerName);
+        } catch (err) {
+            console.error('[Retry] Error in printer selection dialog:', err);
+            return;
+        }
+        if (!printerName) {
+            console.log('[Retry] Printer selection cancelled');
+            return;
+        }
+
+        // Send retry request to main process
+        try {
+            ipcRenderer.send('retry-print-job', { jobId, printerName }); // <-- FIXED
+            showNotification(`Retrying job ${jobId} on printer ${printerName}`, 'info');
+            console.log(`[Retry] Sent retry-print-job for jobId=${jobId} printerName=${printerName}`);
+        } catch (err) {
+            console.error('[Retry] Error sending retry-print-job:', err);
+            showNotification('Failed to initiate retry', 'error');
+        }
+    }
+});
+async function showPrinterSelectionDialog(printerNames) {
+    return new Promise((resolve) => {
+        // Remove any existing modal
+        document.querySelectorAll('.printer-select-modal').forEach(m => m.remove());
+
+        const modal = document.createElement('div');
+        modal.className = 'printer-select-modal';
+        modal.innerHTML = `
+            <div class="printer-select-content">
+                <h3>Select Printer for Retry</h3>
+                <select id="printerSelectDropdown">
+                    ${printerNames.map(name => `<option value="${name}">${name}</option>`).join('')}
+                </select>
+                <div style="margin-top:16px;">
+                    <button id="printerSelectConfirm">Retry</button>
+                    <button id="printerSelectCancel">Cancel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.querySelector('#printerSelectConfirm').onclick = () => {
+            const selected = modal.querySelector('#printerSelectDropdown').value;
+            modal.remove();
+            resolve(selected);
+        };
+        modal.querySelector('#printerSelectCancel').onclick = () => {
+            modal.remove();
+            resolve(null);
+        };
+    });
 }
 
 function filterTransactions() {
@@ -1719,6 +2096,7 @@ function showNotification(message, type) {
     <span>${message}</span>
     ${type === 'error' ? '<button class="notification-close">&times;</button>' : ''}
     `;
+    
     if (type === 'error') {
         notification.querySelector('.notification-close').addEventListener('click', () => {
             notification.style.opacity = '0';
@@ -1727,6 +2105,9 @@ function showNotification(message, type) {
     }
 
     notificationContainer.appendChild(notification);
+    
+    // Play sound based on notification type
+    playNotificationSound(type);
 
     // Auto-remove non-error notifications
     if (type !== 'error') {
@@ -1787,8 +2168,13 @@ ipcRenderer.on('print-job', (_event, job) => {
     fetchAndDisplayPrinters();
 });
 
+// Modify the print-complete event handler
 ipcRenderer.on('print-complete', (_event, jobId) => {
     showNotification(`Job ${jobId} completed successfully`, 'success');
+    // Play job completion sound if enabled
+    if (notificationSettings.jobCompletionSoundEnabled && notificationSettings.soundEnabled) {
+        playNotificationSound('job-completion');
+    }
     fetchJobHistory();
     fetchAndDisplayPrinters();
 });
@@ -1956,59 +2342,13 @@ ipcRenderer.on("kyc-verified", () => {
 });
 
 ipcRenderer.on("shop-info-fetched", (_event, shopInfo) => {
+    ShopInfo = shopInfo || {};
     document.getElementById("shopName").textContent = shopInfo.shop_name || "Not Provided";
     document.getElementById("shopOwner").textContent = shopInfo.owner_name || "Not Provided";
     document.getElementById("shopContact").textContent = shopInfo.contact_number || "Not Provided";
     document.getElementById("shopEmail").textContent = shopInfo.email || "Not Provided";
     document.getElementById("shopAddress").textContent = shopInfo.address || "Not Provided";
     document.getElementById("shopGST").textContent = shopInfo.gst_number || "Not Provided";
-
-    // Update KYC timeline based on kyc_status
-    const kycStatusIndicator = document.querySelector('.kyc-status-indicator');
-    const timelineItems = document.querySelectorAll('.timeline-item');
-    const timelineDate = document.querySelector('.timeline-date');
-    const kycNote = document.querySelector('.kyc-note');
-    const updateKycBtn = document.getElementById('updateKycBtn');
-    const viewKycDetailsBtn = document.getElementById('viewKycDetailsBtn');
-
-    if (shopInfo.kyc_status && kycStatusIndicator && timelineItems.length > 0) {
-        const status = shopInfo.kyc_status.toLowerCase();
-        const updatedAt = new Date(shopInfo.updated_at).toLocaleString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        if (status === 'waiting for document upload') {
-            kycStatusIndicator.className = 'kyc-status-indicator pending';
-            kycStatusIndicator.innerHTML = '<i class="fas fa-upload"></i><span>Waiting for Document Upload</span>';
-            timelineItems[0].classList.add('active');
-            if (kycNote) kycNote.textContent = "Please upload the required documents to proceed with KYC verification.";
-            if (updateKycBtn) updateKycBtn.style.display = 'none';
-            if (viewKycDetailsBtn) viewKycDetailsBtn.style.display = 'none';
-        } else if (status === 'under_review') {
-            kycStatusIndicator.className = 'kyc-status-indicator pending';
-            kycStatusIndicator.innerHTML = '<i class="fas fa-clock"></i><span>Under Review</span>';
-            timelineItems[0].classList.add('active');
-            timelineItems[1].classList.add('active');
-            if (kycNote) kycNote.textContent = "Your KYC documents are under review. Please wait for verification.";
-            if (updateKycBtn) updateKycBtn.style.display = 'inline-block';
-            if (viewKycDetailsBtn) viewKycDetailsBtn.style.display = 'inline-block';
-        } else if (status === 'verified') {
-            kycStatusIndicator.className = 'kyc-status-indicator approved';
-            kycStatusIndicator.innerHTML = '<i class="fas fa-check-circle"></i><span>Verified</span>';
-            timelineItems.forEach(item => item.classList.add('active'));
-            if (kycNote) kycNote.textContent = "Your KYC has been successfully verified.";
-            if (updateKycBtn) updateKycBtn.style.display = 'inline-block';
-            if (viewKycDetailsBtn) viewKycDetailsBtn.style.display = 'inline-block';
-        }
-
-        if (timelineDate) {
-            timelineDate.textContent = updatedAt;
-        }
-    }
 });
 
 ipcRenderer.on("shop-info-updated", (_event, { success, error }) => {
@@ -2043,86 +2383,14 @@ window.navigateToTransactions = () => navigateToPage('transactions.html');
 window.navigateToStatistics = () => navigateToPage('statistics.html');
 window.navigateToSettings = () => navigateToPage('settings.html');
 
-function updateKycButtonState() {
-    const requiredDocTypes = ['passport-photo', 'aadhaar-front', 'pan-card', 'bank-proof'];
-    const updateKycBtn = document.getElementById('updateKycBtn');
-    let allDocsUploaded = true;
 
-    requiredDocTypes.forEach(docType => {
-        const previewContainer = document.getElementById(`${docType}Preview`);
-        if (!previewContainer || previewContainer.children.length === 0) {
-            allDocsUploaded = false;
-        }
-    });
 
-    updateKycBtn.disabled = !allDocsUploaded;
-    updateKycBtn.classList.toggle('inactive', !allDocsUploaded);
-}
-
-document.querySelectorAll('.kyc-upload .file-input').forEach(fileInput => {
-    fileInput.addEventListener('change', async (event) => {
-        const upload = event.target.closest('.kyc-upload');
-        const file = event.target.files[0];
-        const documentType = upload.getAttribute('data-type');
-        logKyc(`File input changed for document type: ${documentType}`, { fileName: file?.name, size: file?.size });
-
-        const previewContainer = document.getElementById(`${documentType}Preview`);
-
-        if (!file) {
-            logKyc(`No file selected for ${documentType}`);
-            return;
-        }
-
-        try {
-            // Save the file path to the dataset for later use
-            const filePath = await saveFileToTemp(file);
-            upload.dataset.filePath = filePath;
-            logKyc(`File path saved for ${documentType}: ${filePath}`);
-
-            // Create document preview
-            const documentPreview = document.createElement('div');
-            documentPreview.className = 'document-item';
-            documentPreview.dataset.file = filePath;
-            documentPreview.innerHTML = `
-                <span class="document-name">${file.name}</span>
-                <span class="document-remove"><i class="fas fa-times"></i></span>
-            `;
-
-            // Add remove functionality
-            documentPreview.querySelector('.document-remove').addEventListener('click', (e) => {
-                e.stopPropagation();
-                logKyc(`Removing file: ${file.name} for document type: ${documentType}`);
-                documentPreview.remove();
-                fileInput.value = '';
-                upload.classList.remove('hidden'); // Show the upload box again
-                delete upload.dataset.filePath; // Remove the stored file path
-            });
-
-            // Clear previous preview and add new one
-            previewContainer.innerHTML = '';
-            previewContainer.appendChild(documentPreview);
-
-            // Hide the upload box
-            upload.classList.add('hidden');
-            logKyc(`File successfully attached for document type: ${documentType}`);
-        } catch (error) {
-            logKyc(`Error saving file for ${documentType}: ${error}`);
-        }
-    });
-});
 
 // Helper function to save the file to a temporary location
-async function saveFileToTemp(file) {
-    const tempDir = require('os').tmpdir();
-    const tempFilePath = `${tempDir}/${file.name}`;
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    require('fs').writeFileSync(tempFilePath, buffer);
-    return tempFilePath;
-}
+
 
 // Call this function initially to ensure the button state is correct
-updateKycButtonState();
+
 
 // Add this function to check session status manually
 async function checkSessionStatus() {
@@ -2155,90 +2423,6 @@ async function checkSessionStatus() {
 setTimeout(checkSessionStatus, 3000);
 
 // Add this function to handle KYC overlay form submission
-async function submitKycFormFromOverlay() {
-    logKyc('submitKycFormFromOverlay called');
-    try {
-        // Collect KYC data from overlay modal fields
-        const getValue = (id) => document.getElementById(id)?.value?.trim() || "";
-        const getFilePath = (type) => {
-            const upload = document.querySelector(`.kyc-upload[data-type="${type}"]`);
-            return upload?.dataset?.filePath || "";
-        };
 
-        // Map your overlay modal's input IDs and data-types to backend fields
-        const kycData = {
-            address: getValue('kycAddress'),
-            state: getValue('kycState'),
-            account_holder_name: getValue('kycAccountHolderName'),
-            account_number: getValue('kycAccountNumber'),
-            ifsc_code: getValue('kycIfsc'),
-            bank_name: getValue('kycBankName'),
-            branch_name: getValue('kycBranchName'),
-            aadhaar: getFilePath('aadhaar-front'),
-            pan_card_path: getFilePath('pan-card'),
-            bank_proof_path: getFilePath('bank-proof'),
-            passport_photo_path: getFilePath('passport-photo'),
-        };
-        logKyc('Collected KYC data', kycData);
-
-        // Validate required fields before sending
-        const requiredFields = [
-            'address', 'aadhaar', 'pan_card_path', 'bank_proof_path', 'passport_photo_path'
-        ];
-        for (const field of requiredFields) {
-            if (!kycData[field]) {
-                logKyc(`Missing required field: ${field}`);
-                showNotification(`Missing required field: ${field.replace(/_/g, ' ')}`, 'error');
-                return;
-            }
-        }
-
-        // Show loading state on button
-        const submitBtn = document.getElementById('submitKycOverlayBtn');
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="refresh-spinner"></span> Submitting...';
-        }
-
-        // Send data to main process
-        logKyc('Sending KYC data to main process');
-        const result = await ipcRenderer.invoke('submit-kyc-data', kycData);
-
-        // Restore button state
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Submit KYC';
-        }
-
-        if (result.success) {
-            logKyc('KYC submitted successfully');
-            showNotification('KYC submitted successfully!', 'success');
-            document.getElementById('kycOverlayModal').classList.add('hidden');
-            document.body.style.overflow = '';
-            // Optionally refresh shop info or UI
-            ipcRenderer.send('fetch-shop-info', currentUser.email);
-        } else {
-            logKyc(`KYC submission failed: ${result.error}`);
-            showNotification(`KYC submission failed: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        logKyc(`KYC error: ${error.message}`);
-        showNotification(`KYC error: ${error.message}`, 'error');
-        const submitBtn = document.getElementById('submitKycOverlayBtn');
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Submit KYC';
-        }
-    }
-}
 
 // Add a helper for logging to both console and terminal
-function logKyc(message, data) {
-    const msg = `[KYC] ${message}` + (data ? ` | ${JSON.stringify(data)}` : '');
-    console.log(msg);
-    try {
-        ipcRenderer.send('log-message', msg);
-    } catch (e) {
-        // Ignore if ipcRenderer not available
-    }
-}
